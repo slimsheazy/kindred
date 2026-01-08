@@ -12,6 +12,7 @@ const Quiz: React.FC = () => {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [partnerAnswers, setPartnerAnswers] = useState<any>(null);
   const [interpretation, setInterpretation] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -25,14 +26,27 @@ const Quiz: React.FC = () => {
 
   const startQuiz = async (selectedTopic: string) => {
     setIsLoading(true);
+    setError(null);
     setTopic(selectedTopic);
-    const generated = await generateQuizQuestions(selectedTopic);
-    setQuestions(generated);
-    setCurrentStep('quiz');
-    setIsLoading(false);
+    try {
+      const generated = await generateQuizQuestions(selectedTopic);
+      if (generated && generated.length > 0) {
+        setQuestions(generated);
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        setCurrentStep('quiz');
+      } else {
+        setError("I couldn't generate questions for this topic. Please try again.");
+      }
+    } catch (err) {
+      setError("Something went wrong while preparing your quiz.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAnswer = (questionId: string, answer: string) => {
+    if (!answer.trim()) return;
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
@@ -51,7 +65,7 @@ const Quiz: React.FC = () => {
   const checkPartnerStatus = async () => {
     if (!userData) return;
     const allAnswers = await cloudService.getQuizAnswers(userData.partnerCode || 'default', topic);
-    const partner = allAnswers.find((a: any) => a.userId !== userData.id || a.user_id !== userData.id);
+    const partner = allAnswers.find((a: any) => a.userId !== userData.id);
     if (partner) {
       setPartnerAnswers(partner.answers);
       generateInsights(partner.answers);
@@ -76,25 +90,44 @@ const Quiz: React.FC = () => {
 
         <p className="text-xl text-[#000000]/70 mb-12 italic font-light">Select a theme for your journey into each other's worlds.</p>
 
+        {error && (
+          <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm italic">
+            {error}
+          </div>
+        )}
+
         <div className="space-y-4">
           {topics.map(t => (
             <button
               key={t}
+              disabled={isLoading}
               onClick={() => startQuiz(t)}
-              className="w-full text-left py-10 border-b border-[#000000]/10 hover:opacity-70 transition-all flex justify-between items-center group"
+              className="w-full text-left py-10 border-b border-[#000000]/10 hover:opacity-70 transition-all flex justify-between items-center group disabled:opacity-50"
             >
               <span className="text-4xl font-light text-[#000000]">{t}</span>
-              <span className="text-xs font-bold text-[#000000]/20 heading-font">Initiate</span>
+              <span className="text-xs font-bold text-[#000000]/20 heading-font">
+                {isLoading && topic === t ? 'Designing...' : 'Initiate'}
+              </span>
             </button>
           ))}
         </div>
-        {isLoading && <div className="mt-8 text-[10px] font-bold uppercase tracking-widest text-[#000000]/50 animate-pulse">Designing questions...</div>}
       </div>
     );
   }
 
   if (currentStep === 'quiz') {
     const q = questions[currentQuestionIndex];
+    
+    // Safety check for undefined question
+    if (!q) {
+        return (
+            <div className="px-6 py-12 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[60vh]">
+                <p className="text-xl text-[#000000]/70 italic mb-12">Something went wrong with the quiz generation.</p>
+                <button onClick={() => setCurrentStep('topic')} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font">Back to Topics</button>
+            </div>
+        );
+    }
+
     return (
       <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in">
         <button onClick={() => setCurrentStep('topic')} className="text-[#000000]/70 text-[10px] font-bold uppercase tracking-widest mb-12 heading-font">← Exit</button>
@@ -120,10 +153,18 @@ const Quiz: React.FC = () => {
                 autoFocus
                 className="w-full bg-transparent border-b border-[#000000]/20 focus:border-[#000000] outline-none text-2xl font-light italic p-4 resize-none h-40"
                 placeholder="Write from the heart..."
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleAnswer(q.id, (e.target as any).value); }}
+                onKeyDown={(e) => { 
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAnswer(q.id, (e.target as any).value);
+                  }
+                }}
               />
               <button 
-                onClick={(e) => handleAnswer(q.id, (e.currentTarget.previousElementSibling as HTMLTextAreaElement).value)}
+                onClick={(e) => {
+                  const val = (e.currentTarget.previousElementSibling as HTMLTextAreaElement).value;
+                  handleAnswer(q.id, val);
+                }}
                 className="w-full py-5 border border-[#000000] text-[#000000] font-bold rounded-full uppercase text-xs tracking-widest"
               >
                 Submit Answer
@@ -139,7 +180,7 @@ const Quiz: React.FC = () => {
     return (
       <div className="px-6 py-12 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
         <h2 className="text-4xl font-light mb-6 text-[#000000]">Patience.</h2>
-        <p className="text-xl text-[#000000]/70 italic mb-12">Your reflections are saved. We're waiting for {userData?.partnerName} to complete their part.</p>
+        <p className="text-xl text-[#000000]/70 italic mb-12">Your reflections are saved. We're waiting for {userData?.partnerName || 'your partner'} to complete their part.</p>
         <button onClick={checkPartnerStatus} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font animate-pulse">Sync Status</button>
       </div>
     );
@@ -153,7 +194,7 @@ const Quiz: React.FC = () => {
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#000000]/70 heading-font">The alchemy of your answers</p>
         </header>
 
-        <div className="lesson-content mb-16">
+        <div className="lesson-content mb-16 prose prose-xl prose-stone">
           <Markdown>{interpretation}</Markdown>
         </div>
 

@@ -91,8 +91,12 @@ export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion
                 }
             }
         });
-        return response.text ? JSON.parse(response.text) : [];
+        const text = response.text || "[]";
+        // Clean markdown code blocks if present
+        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleanJson);
     } catch (error) {
+        console.error("Quiz gen error:", error);
         return [];
     }
 };
@@ -187,7 +191,9 @@ export const generateActivities = async (vibe: string): Promise<Activity[]> => {
                 }
             }
         });
-        return response.text ? JSON.parse(response.text).map((item: any) => ({ ...item, isGenerated: true })) : [];
+        const text = response.text || "[]";
+        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleanJson).map((item: any) => ({ ...item, isGenerated: true }));
     } catch (error) {
         await handleApiError(error);
         return [];
@@ -220,7 +226,9 @@ export const generateLearningPath = async (): Promise<CourseModule[]> => {
                 }
             }
         });
-        return response.text ? JSON.parse(response.text) : [];
+        const text = response.text || "[]";
+        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleanJson);
     } catch (error) {
         await handleApiError(error);
         return [];
@@ -253,7 +261,9 @@ export const generateModuleContent = async (moduleTitle: string): Promise<Lesson
                 }
             }
         });
-        return response.text ? JSON.parse(response.text) : [];
+        const text = response.text || "[]";
+        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleanJson);
     } catch (error) {
         await handleApiError(error);
         return [];
