@@ -1,5 +1,5 @@
 
-import { UserData, JournalEntry, Goal, BondScore } from '../types';
+import { UserData, JournalEntry, Goal, BondScore, QuizQuestion } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 class CloudService {
@@ -27,6 +27,43 @@ class CloudService {
       this.useLocalStorageOnly = true;
     }
     return userData;
+  }
+
+  // --- QUIZ ANSWERS ---
+  async saveQuizAnswer(partnerCode: string, userId: string, quizId: string, answers: any): Promise<void> {
+    const key = `bonds_quiz_${partnerCode}_${quizId}`;
+    const allAnswers = this.getLocal<any>(key);
+    const updated = [...allAnswers.filter((a: any) => a.userId !== userId), { userId, answers, timestamp: Date.now() }];
+    this.saveLocal(key, updated);
+
+    if (!this.useLocalStorageOnly) {
+      try {
+        await supabase.from('quiz_answers').upsert({
+          partner_code: partnerCode,
+          user_id: userId,
+          quiz_id: quizId,
+          answers: answers
+        });
+      } catch (err) {
+        console.error("Failed to sync quiz answer to cloud");
+      }
+    }
+  }
+
+  async getQuizAnswers(partnerCode: string, quizId: string): Promise<any[]> {
+    if (!this.useLocalStorageOnly) {
+      try {
+        const { data, error } = await supabase
+          .from('quiz_answers')
+          .select('*')
+          .eq('partner_code', partnerCode)
+          .eq('quiz_id', quizId);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn("Supabase quiz fetch failed.");
+      }
+    }
+    return this.getLocal<any>(`bonds_quiz_${partnerCode}_${quizId}`);
   }
 
   // --- SCORES (BOND MAP) ---

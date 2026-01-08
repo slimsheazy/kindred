@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { UserData, Activity, CourseModule, Lesson } from "../types";
+import { UserData, Activity, CourseModule, Lesson, QuizQuestion } from "../types";
 
 let currentUserData: UserData | null = null;
 
@@ -60,6 +60,61 @@ export const getCoachingResponse = async (message: string): Promise<string> => {
         return response.text || "";
     } catch (error) {
         return await handleApiError(error);
+    }
+};
+
+export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion[]> => {
+    if (!process.env.API_KEY) return [];
+    try {
+        const ai = getAiClient();
+        const prompt = `Generate 5 fun and meaningful questions for a couples quiz about the topic: "${topic}". 
+        The questions should help partners learn more about each other or reflect on their bond.
+        Context: ${currentUserData?.userName} and ${currentUserData?.partnerName}.`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING },
+                            question: { type: Type.STRING },
+                            type: { type: Type.STRING, enum: ["open", "multiple_choice"] },
+                            options: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        },
+                        required: ["id", "question", "type"]
+                    }
+                }
+            }
+        });
+        return response.text ? JSON.parse(response.text) : [];
+    } catch (error) {
+        return [];
+    }
+};
+
+export const interpretQuizResults = async (quizTitle: string, userAnswers: any[], partnerAnswers: any[]): Promise<string> => {
+    if (!process.env.API_KEY) return "Unable to interpret at this time.";
+    try {
+        const ai = getAiClient();
+        const combined = JSON.stringify({ userAnswers, partnerAnswers });
+        const prompt = `Interpret these combined results from the couples quiz "${quizTitle}".
+        Results: ${combined}.
+        Provide a "Bond Synthesis" and a "Fun Fact" or "Actionable Insight" based on how they answered. 
+        Be playful, supportive, and observant of their similarities or interesting differences. Use Markdown.`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { systemInstruction: getSystemPrompt(), temperature: 0.8 }
+        });
+        return response.text || "";
+    } catch (error) {
+        return "Your answers show a beautiful unique rhythm. Keep exploring each other's worlds.";
     }
 };
 

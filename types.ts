@@ -8,6 +8,7 @@ export enum View {
   Goals = 'GOALS',
   Profile = 'PROFILE',
   Mediation = 'MEDIATION',
+  Quiz = 'QUIZ',
 }
 
 export interface UserData {
@@ -75,4 +76,18 @@ export interface Goal {
   type: 'Individual' | 'Couple';
   progress: number;
   lastUpdated: number;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  type: 'open' | 'multiple_choice';
+  options?: string[];
+}
+
+export interface QuizSession {
+  id: string;
+  title: string;
+  questions: QuizQuestion[];
+  timestamp: number;
 }
