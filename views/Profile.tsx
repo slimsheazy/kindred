@@ -8,6 +8,8 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ onReset }) => {
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [activeMessage, setActiveMessage] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('bonds_user_data');
@@ -19,8 +21,21 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
       return `${userData.userName[0] || 'U'}${userData.partnerName[0] || 'P'}`.toUpperCase();
   };
 
+  const handleAction = (label: string) => {
+    setActiveMessage(`"${label}" will be available in the next version.`);
+    setTimeout(() => setActiveMessage(null), 3000);
+  };
+
+  const copyCode = () => {
+    if (userData?.partnerCode) {
+      navigator.clipboard.writeText(userData.partnerCode);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
+
   return (
-    <div className="px-6 py-12 max-w-xl mx-auto">
+    <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in">
        <header className="mb-16">
         <h1 className="text-6xl font-light mb-2 text-[#000000]">Profile.</h1>
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#000000]/70 heading-font">Manage your shared space</p>
@@ -36,16 +51,31 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
         </h2>
         
         {userData?.partnerCode && (
-            <div className="mt-4 flex flex-col items-center gap-1">
-                <span className="text-[10px] font-bold text-[#000000]/40 uppercase tracking-widest">Shared Code</span>
-                <span className="text-sm font-mono font-bold text-[#000000] tracking-widest">{userData.partnerCode}</span>
-            </div>
+            <button 
+                onClick={copyCode}
+                className="mt-4 flex flex-col items-center gap-1 group"
+            >
+                <span className="text-[10px] font-bold text-[#000000]/40 uppercase tracking-widest group-hover:text-[#000000]/60 transition-colors">
+                  {copySuccess ? 'Copied!' : 'Shared Code'}
+                </span>
+                <span className="text-sm font-mono font-bold text-[#000000] tracking-widest bg-black/5 px-3 py-1 rounded-full">{userData.partnerCode}</span>
+            </button>
         )}
       </div>
 
+      {activeMessage && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest z-[200] animate-fade-in shadow-xl">
+            {activeMessage}
+        </div>
+      )}
+
       <div className="space-y-2 mb-24">
           {['Relationship Settings', 'Privacy & Sync', 'App Appearance', 'Support'].map(item => (
-              <button key={item} className="w-full text-left py-8 border-b border-[#000000]/10 flex justify-between items-center group">
+              <button 
+                key={item} 
+                onClick={() => handleAction(item)}
+                className="w-full text-left py-8 border-b border-[#000000]/10 flex justify-between items-center group hover:bg-black/[0.02] transition-colors"
+              >
                   <span className="text-2xl font-light text-[#000000] group-hover:pl-4 transition-all">{item}</span>
                   <span className="text-xs font-bold text-[#000000]/20">Explore</span>
               </button>

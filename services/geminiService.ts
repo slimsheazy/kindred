@@ -31,6 +31,17 @@ export const initializeGeminiContext = (userData: UserData) => {
   currentUserData = userData;
 };
 
+/**
+ * Robustly extracts a JSON array or object from a string that might contain backticks or conversational text.
+ */
+const extractJson = (text: string): string => {
+  const jsonBlockMatch = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+  if (jsonBlockMatch) {
+    return jsonBlockMatch[0];
+  }
+  return text.trim();
+};
+
 const handleApiError = async (error: any) => {
   console.error("Gemini API Error:", error);
   const errorMessage = error?.message || "";
@@ -49,7 +60,7 @@ const getAiClient = () => {
 };
 
 export const getCoachingResponse = async (message: string): Promise<string> => {
-    if (!process.env.API_KEY) return "Please configure your API key.";
+    if (!process.env.API_KEY) return "API Key not configured in environment.";
     try {
         const ai = getAiClient();
         const response = await ai.models.generateContent({
@@ -64,12 +75,16 @@ export const getCoachingResponse = async (message: string): Promise<string> => {
 };
 
 export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion[]> => {
-    if (!process.env.API_KEY) return [];
+    if (!process.env.API_KEY) {
+        console.error("Quiz Gen Failed: API_KEY missing.");
+        return [];
+    }
     try {
         const ai = getAiClient();
         const prompt = `Generate 5 fun and meaningful questions for a couples quiz about the topic: "${topic}". 
         The questions should help partners learn more about each other or reflect on their bond.
-        Context: ${currentUserData?.userName} and ${currentUserData?.partnerName}.`;
+        Context: ${currentUserData?.userName} and ${currentUserData?.partnerName}.
+        Format: JSON array of objects with id, question, type (open or multiple_choice), and options (if MC).`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
@@ -92,9 +107,7 @@ export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion
             }
         });
         const text = response.text || "[]";
-        // Clean markdown code blocks if present
-        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(cleanJson);
+        return JSON.parse(extractJson(text));
     } catch (error) {
         console.error("Quiz gen error:", error);
         return [];
@@ -102,7 +115,7 @@ export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion
 };
 
 export const interpretQuizResults = async (quizTitle: string, userAnswers: any[], partnerAnswers: any[]): Promise<string> => {
-    if (!process.env.API_KEY) return "Unable to interpret at this time.";
+    if (!process.env.API_KEY) return "Unable to interpret without API credentials.";
     try {
         const ai = getAiClient();
         const combined = JSON.stringify({ userAnswers, partnerAnswers });
@@ -192,8 +205,7 @@ export const generateActivities = async (vibe: string): Promise<Activity[]> => {
             }
         });
         const text = response.text || "[]";
-        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(cleanJson).map((item: any) => ({ ...item, isGenerated: true }));
+        return JSON.parse(extractJson(text)).map((item: any) => ({ ...item, isGenerated: true }));
     } catch (error) {
         await handleApiError(error);
         return [];
@@ -227,8 +239,7 @@ export const generateLearningPath = async (): Promise<CourseModule[]> => {
             }
         });
         const text = response.text || "[]";
-        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(cleanJson);
+        return JSON.parse(extractJson(text));
     } catch (error) {
         await handleApiError(error);
         return [];
@@ -262,8 +273,7 @@ export const generateModuleContent = async (moduleTitle: string): Promise<Lesson
             }
         });
         const text = response.text || "[]";
-        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(cleanJson);
+        return JSON.parse(extractJson(text));
     } catch (error) {
         await handleApiError(error);
         return [];

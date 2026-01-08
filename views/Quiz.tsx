@@ -22,6 +22,17 @@ const Quiz: React.FC = () => {
     if (saved) setUserData(JSON.parse(saved));
   }, []);
 
+  // Poll for partner answers while waiting
+  useEffect(() => {
+    let interval: any;
+    if (currentStep === 'waiting') {
+      interval = setInterval(() => {
+        checkPartnerStatus();
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [currentStep, topic]);
+
   const topics = ['Love Languages', 'Our Future', 'Memories', 'Daily Rhythms', 'Deep Desires'];
 
   const startQuiz = async (selectedTopic: string) => {
@@ -36,10 +47,10 @@ const Quiz: React.FC = () => {
         setAnswers({});
         setCurrentStep('quiz');
       } else {
-        setError("I couldn't generate questions for this topic. Please try again.");
+        setError("The Oracle couldn't generate questions right now. Please check your connection or API key.");
       }
     } catch (err) {
-      setError("Something went wrong while preparing your quiz.");
+      setError("Something went wrong while preparing your quiz. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +74,7 @@ const Quiz: React.FC = () => {
   };
 
   const checkPartnerStatus = async () => {
-    if (!userData) return;
+    if (!userData || !topic) return;
     const allAnswers = await cloudService.getQuizAnswers(userData.partnerCode || 'default', topic);
     const partner = allAnswers.find((a: any) => a.userId !== userData.id);
     if (partner) {
@@ -73,11 +84,17 @@ const Quiz: React.FC = () => {
   };
 
   const generateInsights = async (pAnswers: any) => {
+    if (interpretation || isLoading) return; // Prevent double trigger
     setIsLoading(true);
-    const res = await interpretQuizResults(topic, Object.values(answers), Object.values(pAnswers));
-    setInterpretation(res);
-    setCurrentStep('results');
-    setIsLoading(false);
+    try {
+      const res = await interpretQuizResults(topic, Object.values(answers), Object.values(pAnswers));
+      setInterpretation(res);
+      setCurrentStep('results');
+    } catch (err) {
+      console.error("Interpretation failed", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (currentStep === 'topic') {
@@ -91,8 +108,14 @@ const Quiz: React.FC = () => {
         <p className="text-xl text-[#000000]/70 mb-12 italic font-light">Select a theme for your journey into each other's worlds.</p>
 
         {error && (
-          <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm italic">
-            {error}
+          <div className="mb-12 p-6 bg-red-50 border border-red-100 rounded-3xl text-red-600">
+            <p className="text-sm italic mb-4">{error}</p>
+            <button 
+              onClick={() => startQuiz(topic)}
+              className="text-[10px] font-bold uppercase tracking-widest border-b border-red-600 pb-1"
+            >
+              Retry Connection
+            </button>
           </div>
         )}
 
@@ -117,16 +140,7 @@ const Quiz: React.FC = () => {
 
   if (currentStep === 'quiz') {
     const q = questions[currentQuestionIndex];
-    
-    // Safety check for undefined question
-    if (!q) {
-        return (
-            <div className="px-6 py-12 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[60vh]">
-                <p className="text-xl text-[#000000]/70 italic mb-12">Something went wrong with the quiz generation.</p>
-                <button onClick={() => setCurrentStep('topic')} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font">Back to Topics</button>
-            </div>
-        );
-    }
+    if (!q) return null;
 
     return (
       <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in">
@@ -181,7 +195,10 @@ const Quiz: React.FC = () => {
       <div className="px-6 py-12 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
         <h2 className="text-4xl font-light mb-6 text-[#000000]">Patience.</h2>
         <p className="text-xl text-[#000000]/70 italic mb-12">Your reflections are saved. We're waiting for {userData?.partnerName || 'your partner'} to complete their part.</p>
-        <button onClick={checkPartnerStatus} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font animate-pulse">Sync Status</button>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-2 border-black/10 border-t-black rounded-full animate-spin"></div>
+          <button onClick={checkPartnerStatus} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font">Force Sync</button>
+        </div>
       </div>
     );
   }
@@ -198,7 +215,7 @@ const Quiz: React.FC = () => {
           <Markdown>{interpretation}</Markdown>
         </div>
 
-        <button onClick={() => setCurrentStep('topic')} className="w-full py-5 bg-[#000000] text-white font-bold rounded-full uppercase text-xs tracking-widest">Done</button>
+        <button onClick={() => setCurrentStep('topic')} className="w-full py-5 bg-[#000000] text-white font-bold rounded-full uppercase text-xs tracking-widest">Return to Home</button>
       </div>
     );
   }
