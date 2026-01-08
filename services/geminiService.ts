@@ -1,15 +1,29 @@
-import { GoogleGenAI, Chat, Type } from "@google/genai";
+
+import { GoogleGenAI, Type } from "@google/genai";
 import { UserData, Activity, CourseModule, Lesson } from "../types";
 
-let chat: Chat | null = null;
 let currentUserData: UserData | null = null;
 
+// Declare global for AI Studio environment
+declare global {
+  // Fix: Explicitly define AIStudio interface to match environmental expectations
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    // Fix: Match the expected 'AIStudio' type and use identical modifiers (readonly)
+    readonly aistudio: AIStudio;
+  }
+}
+
 const getSystemPrompt = () => {
-  const basePrompt = "You are a warm, empathetic AI relationship coach from the 'Bonds Connect' app. Your goal is to provide supportive, insightful, and practical advice based on relationship science principles like the Gottman Method and Emotionally Focused Therapy. Avoid clinical diagnoses. Keep responses concise, encouraging, and actionable. Use markdown for formatting when appropriate.";
+  const basePrompt = "You are a world-class, empathetic AI relationship coach from 'Bonds Connect'. You use evidence-based frameworks like the Gottman Method and EFT. Your goal is to provide supportive, insightful, and practical advice. Keep responses concise, encouraging, and actionable. Use markdown.";
   
   if (currentUserData) {
     const focusString = currentUserData.focusAreas.join(', ');
-    return `${basePrompt} You are specifically coaching ${currentUserData.userName} and their partner ${currentUserData.partnerName}. They have been together for ${currentUserData.yearsTogether}. Their primary relationship focus areas are: "${focusString}". Tailor your advice to support these specific goals.`;
+    return `${basePrompt} You are coaching ${currentUserData.userName} and ${currentUserData.partnerName} (${currentUserData.yearsTogether} together). Focus areas: ${focusString}.`;
   }
   
   return basePrompt;
@@ -17,63 +31,71 @@ const getSystemPrompt = () => {
 
 export const initializeGeminiContext = (userData: UserData) => {
   currentUserData = userData;
-  chat = null; // Reset chat to apply new prompt
 };
 
-const getChat = () => {
-    if (!chat) {
-        if (!process.env.API_KEY) {
-            console.warn("API_KEY environment variable not set. Using mock responses.");
-            return null;
-        }
-        // Always initialize the client using the named apiKey parameter
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        chat = ai.chats.create({
-            model: 'gemini-3-flash-preview',
-            config: {
-                systemInstruction: getSystemPrompt(),
-            },
-        });
+/**
+ * Handles API errors, specifically looking for key selection issues
+ */
+const handleApiError = async (error: any) => {
+  console.error("Gemini API Error:", error);
+  const errorMessage = error?.message || "";
+  
+  if (errorMessage.includes("Requested entity was not found") || errorMessage.includes("API key")) {
+    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+      console.warn("API Key issue detected. Opening selection dialog.");
+      await window.aistudio.openSelectKey();
     }
-    return chat;
-}
+  }
+  return "I'm having a slight connection issue. Please make sure your API key is active and try again.";
+};
+
+/**
+ * Creates a fresh AI instance for every call to ensure the latest API key is used
+ */
+const getAiClient = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 export const getCoachingResponse = async (message: string): Promise<string> => {
-    const chatSession = getChat();
-    if (!chatSession) {
-        return new Promise(resolve => setTimeout(() => resolve("This is a mock response because the API key is not set. To get a real response, please configure your API key."), 1000));
+    if (!process.env.API_KEY) {
+        return "Please configure your API key to talk to the coach.";
     }
 
     try {
-        // chat.sendMessage accepts a message parameter and returns a response containing the generated text
-        const response = await chatSession.sendMessage({ message });
-        return response.text;
+        const ai = getAiClient();
+        // Relationship coaching is a complex task, using Pro model
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: message,
+            config: {
+                systemInstruction: getSystemPrompt(),
+                temperature: 0.7,
+            }
+        });
+        return response.text || "";
     } catch (error) {
-        console.error("Error getting coaching response:", error);
-        return "I'm sorry, I'm having a little trouble right now. Please try again in a moment.";
+        return await handleApiError(error);
     }
 };
 
 export const getDailyPrompt = async (): Promise<string> => {
     if (!process.env.API_KEY) {
-        console.warn("API_KEY environment variable not set. Using mock prompt.");
-        return "What's a small gesture from your partner that recently made you feel loved?";
+        return "What's one thing you appreciate about your partner today?";
     }
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        let promptRequest = "Generate one, and only one, deep and thoughtful daily connection prompt for a couple to answer.";
+        const ai = getAiClient();
+        let promptRequest = "Generate one deep daily connection prompt for a couple.";
         if (currentUserData) {
-            promptRequest += ` The couple is focused on "${currentUserData.focusAreas.join(', ')}".`;
+            promptRequest += ` Focus on: ${currentUserData.focusAreas.join(', ')}.`;
         }
-        promptRequest += " The prompt should encourage vulnerability and sharing. Do not add any preamble or extra text, just the prompt itself.";
+        promptRequest += " No preamble, just the prompt.";
 
-        // Use generateContent for a direct text response using the recommended flash model
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: promptRequest,
         });
-        return response.text.trim();
+        return response.text?.trim() || "";
     } catch (error) {
         console.error("Error getting daily prompt:", error);
         return "What's a dream you haven't shared with me yet?";
@@ -81,28 +103,17 @@ export const getDailyPrompt = async (): Promise<string> => {
 }
 
 export const generateActivities = async (vibe: string): Promise<Activity[]> => {
-    if (!process.env.API_KEY) {
-        return [
-            { title: "Mock Activity 1", category: vibe, description: "Description here.", duration: "30 mins", difficulty: "Easy", isGenerated: true },
-            { title: "Mock Activity 2", category: vibe, description: "Description here.", duration: "1 hour", difficulty: "Medium", isGenerated: true }
-        ];
-    }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    let prompt = `Generate 4 unique, engaging relationship activities or date ideas for a couple. 
-    The requested vibe is: ${vibe}.`;
-    
-    if (currentUserData) {
-        prompt += ` The couple has been together for ${currentUserData.yearsTogether} and wants to focus on ${currentUserData.focusAreas.join(', ')}.`;
-    }
-
-    prompt += ` Return valid JSON.`;
+    if (!process.env.API_KEY) return [];
 
     try {
-        // Request structured JSON output using responseSchema and gemini-3-flash-preview
+        const ai = getAiClient();
+        let prompt = `Generate 4 unique relationship activities. Vibe: ${vibe}.`;
+        if (currentUserData) {
+            prompt += ` Context: ${currentUserData.yearsTogether} together, focusing on ${currentUserData.focusAreas.join(', ')}.`;
+        }
+
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-pro-preview",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -116,47 +127,34 @@ export const generateActivities = async (vibe: string): Promise<Activity[]> => {
                             description: { type: Type.STRING },
                             duration: { type: Type.STRING },
                             difficulty: { type: Type.STRING },
-                        }
+                        },
+                        required: ["title", "category", "description", "duration", "difficulty"]
                     }
                 }
             }
         });
         
-        // Extracting generated text directly from the text property
         if (response.text) {
              const data = JSON.parse(response.text);
              return data.map((item: any) => ({ ...item, isGenerated: true }));
         }
         return [];
     } catch (error) {
-        console.error("Error generating activities:", error);
+        await handleApiError(error);
         return [];
     }
 };
 
 export const generateLearningPath = async (): Promise<CourseModule[]> => {
-    if (!process.env.API_KEY) {
-        return [
-            { title: "Foundation of Connection", description: "Revisiting the core reasons you fell in love.", duration: "Week 1", status: "active" },
-            { title: "Communication Styles", description: "Identifying how you both express needs.", duration: "Week 2", status: "locked" },
-            { title: "Shared Vision", description: "Aligning your future goals.", duration: "Week 3", status: "locked" },
-        ];
-    }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    let prompt = `Create a 4-module relationship growth course (learning path) for a couple. 
-    They have been together for ${currentUserData?.yearsTogether || 'some time'}.
-    Their specific focus areas are: ${currentUserData?.focusAreas.join(', ') || 'general growth'}.
-    
-    Each module should have a title, a short description, and a duration (e.g., "Week 1").
-    The first module should be "active", others "locked".
-    `;
+    if (!process.env.API_KEY) return [];
 
     try {
-        // Generating learning path modules in JSON format
+        const ai = getAiClient();
+        const prompt = `Create a 4-module relationship growth course for a couple focused on ${currentUserData?.focusAreas.join(', ') || 'growth'}. 
+        First module status: "active", others "locked".`;
+
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-pro-preview",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -169,67 +167,30 @@ export const generateLearningPath = async (): Promise<CourseModule[]> => {
                             description: { type: Type.STRING },
                             duration: { type: Type.STRING },
                             status: { type: Type.STRING, enum: ["active", "locked", "completed"] },
-                        }
+                        },
+                        required: ["title", "description", "duration", "status"]
                     }
                 }
             }
         });
 
-        if (response.text) {
-            return JSON.parse(response.text);
-        }
-        return [];
+        return response.text ? JSON.parse(response.text) : [];
     } catch (error) {
-        console.error("Error generating learning path:", error);
+        await handleApiError(error);
         return [];
     }
 };
 
 export const generateModuleContent = async (moduleTitle: string): Promise<Lesson[]> => {
-    if (!process.env.API_KEY) {
-        return [
-             { 
-                 title: "Understanding Your Emotional Blueprint", 
-                 type: "Reading", 
-                 description: "A deep dive into how your past shapes your present connection.",
-                 longContent: "## The Architecture of Love\n\nYour 'Emotional Blueprint' is the set of assumptions and expectations you bring into your relationship, often formed in childhood. \n\n### Why it Matters\nWhen we understand our own blueprint, we stop reacting blindly to triggers. For example, if you grew up in a home where conflict was dangerous, you might shut down during arguments. Your partner might interpret this as indifference, when it's actually self-protection.\n\n### Reflection\nThink about the last time you felt truly understood. What did your partner do? That is a clue to your blueprint." 
-             },
-             { 
-                 title: "The 'Daily Temperature Reading' Exercise", 
-                 type: "Exercise", 
-                 description: "A practical 5-step method to clear the air and reconnect daily.",
-                 longContent: "## Daily Temperature Reading\n\nSet aside 15 minutes today to try this structural conversation. Take turns for each step.\n\n1. **Appreciations**: Share 3 specific things you appreciated about your partner today.\n2. **New Information**: Update each other on logistics, news, or mood.\n3. **Puzzles**: Ask about something you don't understand (e.g., 'I wasn't sure what you meant when...'). Avoid accusations.\n4. **Complaints with Requests**: 'I feel X when Y happens. In the future, could you Z?'\n5. **Wishes, Hopes, Dreams**: Share one thing you are looking forward to." 
-             },
-             {
-                 title: "Navigating Conflict Styles",
-                 type: "Prompt",
-                 description: "Discussing how you fight and how you heal.",
-                 longContent: "## Discussion: Conflict Styles\n\nWe all fight differently. Some of us are 'pursuers' who want to solve it *now*, and some are 'withdrawers' who need space to process.\n\n**Ask each other:**\n1. In our last argument, did you feel the urge to push closer or pull away?\n2. What is one thing I can say when we are arguing that helps you feel safe?\n3. How did your parents handle conflict, and how is our way similar or different?"
-             }
-        ];
-    }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-    let prompt = `Create a detailed, fully fleshed-out curriculum for the relationship course module "${moduleTitle}".
-    The couple focuses on: ${currentUserData?.focusAreas.join(', ')}.
-    
-    Generate 3 specific lessons.
-    For each lesson, provide:
-    1. Title
-    2. Type ('Reading', 'Exercise', or 'Prompt')
-    3. Description (a short 1-sentence summary)
-    4. LongContent (THE MOST IMPORTANT PART):
-       - If 'Reading': Write a thoughtful, 150-200 word mini-article on the topic. Use Markdown headers.
-       - If 'Exercise': Provide a structured, step-by-step guide on how to do the activity together.
-       - If 'Prompt': Provide context, the main question, and 3 follow-up discussion questions.
-    
-    The content should be high-quality, actionable, and ready to consume immediately.`;
+    if (!process.env.API_KEY) return [];
 
     try {
-        // Generating detailed educational content using JSON structured output
+        const ai = getAiClient();
+        const prompt = `Create a 3-lesson curriculum for the module: "${moduleTitle}". Focus: ${currentUserData?.focusAreas.join(', ')}. 
+        Include detailed Markdown 'longContent' for each lesson (Reading, Exercise, or Prompt).`;
+
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-pro-preview",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -242,18 +203,16 @@ export const generateModuleContent = async (moduleTitle: string): Promise<Lesson
                             type: { type: Type.STRING, enum: ["Reading", "Exercise", "Prompt"] },
                             description: { type: Type.STRING },
                             longContent: { type: Type.STRING },
-                        }
+                        },
+                        required: ["title", "type", "description", "longContent"]
                     }
                 }
             }
         });
 
-        if (response.text) {
-            return JSON.parse(response.text);
-        }
-        return [];
+        return response.text ? JSON.parse(response.text) : [];
     } catch (error) {
-        console.error("Error generating module content:", error);
+        await handleApiError(error);
         return [];
     }
 }

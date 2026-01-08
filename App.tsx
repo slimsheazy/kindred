@@ -15,8 +15,21 @@ const App: React.FC = () => {
   const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
 
-  // Load initial state
+  // Load initial state and check for API key
   useEffect(() => {
+    const checkApiKey = async () => {
+      // In the AI Studio shell environment, we should check if a key is actually selected
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          console.log("No API key selected yet, opening selection dialog...");
+          await window.aistudio.openSelectKey();
+        }
+      }
+    };
+    
+    checkApiKey();
+
     const savedData = localStorage.getItem('bonds_user_data');
     const onboarded = localStorage.getItem('bonds_has_onboarded');
     
@@ -62,7 +75,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Prevent flash of onboarding screen during hydration
   if (hasOnboarded === null) return null;
 
   if (!hasOnboarded) {
