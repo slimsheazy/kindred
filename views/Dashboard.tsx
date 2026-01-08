@@ -11,8 +11,11 @@ interface DashboardProps {
   userData: UserData | null;
 }
 
-// Interactive List Item Component for Markdown
-const CheckableListItem: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+/**
+ * Interactive List Item Component for Markdown
+ * Handles the 'children' prop strictly to avoid TS build errors.
+ */
+const CheckableListItem = ({ children }: { children?: React.ReactNode }) => {
     const [checked, setChecked] = useState(false);
     return (
         <li 
@@ -105,7 +108,7 @@ const LessonView: React.FC<{ lesson: Lesson, onClose: () => void, onComplete: ()
                                 p: ({node, ...props}) => <p className="text-lg text-white/80 leading-relaxed mb-6 font-light" {...props} />,
                                 ul: ({node, ...props}) => <ul className="space-y-2 mb-8" {...props} />,
                                 ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-2 mb-8 text-white/80" {...props} />,
-                                li: ({node, ...props}) => <CheckableListItem {...props} />, 
+                                li: ({children}) => <CheckableListItem>{children}</CheckableListItem>, 
                                 blockquote: ({node, ...props}) => (
                                     <blockquote className="border-l-4 border-rose-400/50 bg-rose-900/10 p-6 rounded-r-xl italic text-rose-100 my-8">
                                         {props.children}
@@ -120,7 +123,7 @@ const LessonView: React.FC<{ lesson: Lesson, onClose: () => void, onComplete: ()
 
                     <div className="mt-16 bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-sm">
                         <div className="flex items-center gap-3 mb-4 text-teal-300">
-                             <SparklesIcon className="w-5 h-5" />
+                             <span className="w-5 h-5 flex items-center justify-center">✨</span>
                              <h3 className="text-lg font-bold">Your Reflection</h3>
                         </div>
                         <p className="text-white/60 text-sm mb-4">Take a moment to write down one key takeaway or intention from this session.</p>

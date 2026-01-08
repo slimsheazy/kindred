@@ -58,7 +58,9 @@ const AICoach: React.FC = () => {
                       ? 'bg-slate-800 text-white rounded-br-none' 
                       : 'bg-white/60 backdrop-blur-sm text-slate-800 border border-white/50 rounded-bl-none'
                   }`}>
-                      <Markdown className="prose prose-sm max-w-none prose-p:my-0 prose-ul:my-0 prose-ol:my-0 text-inherit">{msg.text}</Markdown>
+                      <div className="prose prose-sm max-w-none prose-p:my-0 prose-ul:my-0 prose-ol:my-0 text-inherit">
+                        <Markdown>{msg.text}</Markdown>
+                      </div>
                   </div>
                 </div>
             ))}

@@ -6,14 +6,14 @@ let currentUserData: UserData | null = null;
 
 // Declare global for AI Studio environment
 declare global {
-  // Fix: Explicitly define AIStudio interface to match environmental expectations
+  // Define AIStudio interface to match the system's expected global type
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
 
   interface Window {
-    // Fix: Match the expected 'AIStudio' type and use identical modifiers (readonly)
+    // Use the named AIStudio interface and readonly modifier to match existing global declarations
     readonly aistudio: AIStudio;
   }
 }
@@ -63,7 +63,6 @@ export const getCoachingResponse = async (message: string): Promise<string> => {
 
     try {
         const ai = getAiClient();
-        // Relationship coaching is a complex task, using Pro model
         const response = await ai.models.generateContent({
             model: 'gemini-3-pro-preview',
             contents: message,
