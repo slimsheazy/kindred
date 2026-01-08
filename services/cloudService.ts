@@ -1,5 +1,5 @@
 
-import { UserData, JournalEntry, Goal } from '../types';
+import { UserData, JournalEntry, Goal, BondScore } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 class CloudService {
@@ -29,6 +29,37 @@ class CloudService {
     return userData;
   }
 
+  // --- SCORES (BOND MAP) ---
+  async getBondScores(partnerCode: string): Promise<BondScore[]> {
+    if (!this.useLocalStorageOnly) {
+      try {
+        const { data, error } = await supabase
+          .from('bond_scores')
+          .select('*')
+          .eq('partner_code', partnerCode)
+          .order('timestamp', { ascending: true });
+
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn("Supabase bond_scores fetch failed, falling back to local.");
+      }
+    }
+    return this.getLocal<BondScore>(`bonds_scores_${partnerCode}`);
+  }
+
+  async saveBondScore(partnerCode: string, score: BondScore): Promise<void> {
+    const scores = this.getLocal<BondScore>(`bonds_scores_${partnerCode}`);
+    this.saveLocal(`bonds_scores_${partnerCode}`, [...scores, score]);
+
+    if (!this.useLocalStorageOnly) {
+      try {
+        await supabase.from('bond_scores').upsert({ ...score, partner_code: partnerCode });
+      } catch (err) {
+        console.error("Failed to sync score to cloud");
+      }
+    }
+  }
+
   // --- JOURNAL ---
   async getJournalEntries(partnerCode: string): Promise<JournalEntry[]> {
     if (!this.useLocalStorageOnly) {
@@ -41,14 +72,13 @@ class CloudService {
 
         if (!error && data) return data;
       } catch (err) {
-        this.useLocalStorageOnly = true;
+        console.warn("Supabase journal fetch failed.");
       }
     }
     return this.getLocal<JournalEntry>(`bonds_journal_${partnerCode}`);
   }
 
   async saveJournalEntry(partnerCode: string, entry: JournalEntry): Promise<void> {
-    // Always save local first for instant feedback/offline support
     const entries = this.getLocal<JournalEntry>(`bonds_journal_${partnerCode}`);
     this.saveLocal(`bonds_journal_${partnerCode}`, [entry, ...entries]);
 
@@ -73,7 +103,7 @@ class CloudService {
 
         if (!error && data) return data;
       } catch (err) {
-        this.useLocalStorageOnly = true;
+        console.warn("Supabase goals fetch failed.");
       }
     }
     return this.getLocal<Goal>(`bonds_goals_${partnerCode}`);

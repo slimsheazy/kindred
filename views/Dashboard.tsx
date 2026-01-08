@@ -1,43 +1,194 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import DailyPrompt from '../components/DailyPrompt';
 import AICoach from '../components/AICoach';
-import { UserData, CourseModule, Lesson } from '../types';
-import { generateLearningPath, generateModuleContent } from '../services/geminiService';
+import { UserData, CourseModule, Lesson, BondScore, View } from '../types';
+import { generateLearningPath, generateModuleContent, getExerciseInterpretation } from '../services/geminiService';
+import { cloudService } from '../services/cloudService';
 import Markdown from 'react-markdown';
-import { BookOpenIcon, PuzzleIcon, SparklesIcon } from '../components/Icons';
+import { BookOpenIcon, PuzzleIcon, SparklesIcon, BrainIcon, ScaleIcon } from '../components/Icons';
+import { GoogleGenAI, Modality } from "@google/genai";
 
 interface DashboardProps {
   userData: UserData | null;
+  onNavigate?: (view: View) => void;
 }
+
+// Audio helper for TTS
+const decodeAudioData = async (data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> => {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+};
+
+const decodeBase64 = (base64: string) => {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  return bytes;
+};
 
 /**
- * Interactive List Item Component for Markdown
- * Properly handles optional children and catches internal markdown props.
+ * Visual Radar Chart for Bond Metrics
  */
-interface CheckableListItemProps {
-  children?: React.ReactNode;
-  node?: any;
-  index?: any;
-  ordered?: any;
-  siblingCount?: any;
-}
+const BondMap: React.FC<{ scores: BondScore[] }> = ({ scores }) => {
+    const categories = ['Communication', 'Intimacy', 'Trust', 'Conflict', 'Shared Vision'];
+    const chartData = useMemo(() => {
+        return categories.map(cat => {
+            const catScores = scores.filter(s => s.category === cat);
+            const latest = catScores.length > 0 ? catScores[catScores.length - 1].score : 0; 
+            return latest;
+        });
+    }, [scores]);
 
-const CheckableListItem: React.FC<CheckableListItemProps> = ({ children }) => {
+    const size = 200;
+    const center = size / 2;
+    const radius = size * 0.35;
+
+    const points = chartData.map((val, i) => {
+        const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+        const r = (val / 10) * radius;
+        return {
+            x: center + r * Math.cos(angle),
+            y: center + r * Math.sin(angle),
+            labelX: center + (radius + 20) * Math.cos(angle),
+            labelY: center + (radius + 20) * Math.sin(angle),
+        };
+    });
+
+    const polygonPath = points.map(p => `${p.x},${p.y}`).join(' ');
+    const gridLevels = [0.2, 0.4, 0.6, 0.8, 1.0].map(level => {
+        return categories.map((_, i) => {
+            const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+            const r = level * radius;
+            return `${center + r * Math.cos(angle)},${center + r * Math.sin(angle)}`;
+        }).join(' ');
+    });
+
+    const hasNoData = chartData.every(v => v === 0);
+
+    return (
+        <div className="glass-panel rounded-3xl p-6 shadow-2xl border-white/10 relative overflow-hidden bg-white/5">
+            <div className="flex items-center gap-2 mb-2">
+                <BrainIcon className="w-5 h-5 text-rose-400" />
+                <h3 className="text-sm font-semibold tracking-wide text-white/80 heading-font">Bond Map</h3>
+            </div>
+            
+            <div className="flex justify-center items-center py-2">
+                <svg width={size} height={size} className="overflow-visible">
+                    {gridLevels.map((path, i) => (
+                        <polygon key={i} points={path} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                    ))}
+                    {categories.map((_, i) => {
+                        const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+                        return (
+                            <line 
+                                key={i}
+                                x1={center} y1={center} 
+                                x2={center + radius * Math.cos(angle)} y2={center + radius * Math.sin(angle)} 
+                                stroke="rgba(255,255,255,0.05)" strokeWidth="1" 
+                            />
+                        );
+                    })}
+                    {!hasNoData && (
+                        <polygon 
+                            points={polygonPath} 
+                            fill="rgba(244, 63, 94, 0.2)" 
+                            stroke="rgba(244, 63, 94, 0.6)" 
+                            strokeWidth="2"
+                            className="transition-all duration-1000 ease-out"
+                        />
+                    )}
+                    {points.map((p, i) => (
+                        <text 
+                            key={i} 
+                            x={p.labelX} y={p.labelY} 
+                            fontSize="8" 
+                            fontWeight="bold"
+                            textAnchor="middle" 
+                            alignmentBaseline="middle"
+                            className="fill-white/30 uppercase tracking-tighter"
+                        >
+                            {categories[i]}
+                        </text>
+                    ))}
+                    {!hasNoData && points.map((p, i) => (
+                        <circle key={i} cx={p.x} cy={p.y} r="3" fill="rgba(244, 63, 94, 0.8)" />
+                    ))}
+                    {hasNoData && (
+                        <text x={center} y={center} fontSize="10" textAnchor="middle" className="fill-white/20 italic">No activity data</text>
+                    )}
+                </svg>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * Interactive Scoring and List Components
+ */
+const getScorePreview = (value: number) => {
+  if (value === 0) return "Never or not at all";
+  if (value === 1) return "I rarely feel this way";
+  if (value === 2) return "I occasionally feel this way";
+  if (value === 3) return "I feel this way sometimes";
+  if (value === 4) return "This resonates somewhat";
+  if (value === 5) return "This resonates moderately";
+  if (value === 6) return "This feels mostly true";
+  if (value === 7) return "This resonates quite often";
+  if (value === 8) return "This is a frequent experience";
+  if (value === 9) return "This highly resonates with me";
+  if (value === 10) return "This completely defines us";
+  return "";
+};
+
+const ScoreItem: React.FC<{ children?: React.ReactNode, value: number, onChange: (val: number) => void }> = ({ children, value, onChange }) => (
+    <li className="flex flex-col gap-4 p-6 rounded-2xl bg-white/5 border border-white/10 mb-6 group hover:bg-white/10 transition-all cursor-pointer" onClick={() => onChange(Math.min(10, value + 1))}>
+        <div className="text-white text-lg leading-relaxed font-semibold">{children}</div>
+        
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/30 heading-font">Reflection Level</span>
+                <span className="text-sm font-medium text-rose-300 transition-all duration-200" key={value}>
+                    {getScorePreview(value)}
+                </span>
+            </div>
+            
+            <div className="flex items-center gap-6">
+                <input 
+                  type="range" 
+                  min="0" max="10" step="1" 
+                  value={value} 
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onChange(parseInt(e.target.value))} 
+                  className="flex-grow h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-rose-400" 
+                />
+                <div className="w-14 h-12 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-300 font-bold text-xl shadow-inner transition-transform active:scale-95">
+                    {value}
+                </div>
+            </div>
+        </div>
+    </li>
+);
+
+const InteractiveListItem: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
     const [checked, setChecked] = useState(false);
     return (
         <li 
-            onClick={() => setChecked(!checked)}
-            className={`flex items-start gap-4 p-4 rounded-xl transition-all cursor-pointer group mb-2 border ${
-                checked 
-                ? 'bg-teal-500/10 border-teal-500/30' 
-                : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/10'
-            }`}
+          onClick={() => setChecked(!checked)}
+          className={`flex items-start gap-4 p-5 rounded-xl transition-all cursor-pointer mb-3 border ${
+            checked ? 'bg-teal-500/10 border-teal-500/30' : 'bg-white/5 border-white/5 hover:bg-white/10'
+          }`}
         >
-            <div className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                checked 
-                ? 'bg-teal-500 border-teal-500 scale-110' 
-                : 'border-white/30 group-hover:border-white/60'
+            <div className={`mt-1.5 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                checked ? 'bg-teal-500 border-teal-500 scale-110' : 'border-white/30'
             }`}>
                 {checked && (
                     <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -45,364 +196,331 @@ const CheckableListItem: React.FC<CheckableListItemProps> = ({ children }) => {
                     </svg>
                 )}
             </div>
-            <div className={`text-base md:text-lg leading-relaxed transition-opacity duration-300 ${checked ? 'line-through text-white/40' : 'text-white/90'}`}>
+            <div className={`text-lg transition-opacity duration-300 ${checked ? 'line-through text-white/40' : 'text-white'}`}>
                 {children}
             </div>
         </li>
     );
 };
 
-const LessonView: React.FC<{ lesson: Lesson, onClose: () => void, onComplete: () => void }> = ({ lesson, onClose, onComplete }) => {
-    const [reflection, setReflection] = useState('');
-    const [scrollProgress, setScrollProgress] = useState(0);
-    const contentRef = useRef<HTMLDivElement>(null);
+const LessonView: React.FC<{ lesson: Lesson, userData: UserData | null, onClose: () => void, onComplete: (scores?: Record<string, number>) => void }> = ({ lesson, userData, onClose, onComplete }) => {
+    const [scores, setScores] = useState<Record<string, number>>({});
+    const [interpretation, setInterpretation] = useState('');
+    const [isInterpreting, setIsInterpreting] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const audioRef = useRef<AudioBufferSourceNode | null>(null);
 
-    const handleScroll = () => {
-        if (contentRef.current) {
-            const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
-            const progress = (scrollTop / (scrollHeight - clientHeight)) * 100;
-            setScrollProgress(progress);
+    const handleReadAloud = async () => {
+        if (isSpeaking) {
+            setIsSpeaking(false);
+            if (audioRef.current) audioRef.current.stop();
+            return;
+        }
+
+        setIsSpeaking(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `Read the following relationship lesson content aloud in a calm, soothing, and supportive tone. 
+            Content: ${lesson.title}. ${lesson.description}. ${lesson.longContent}`;
+            
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash-preview-tts",
+                contents: [{ parts: [{ text: prompt }] }],
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: {
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+                    },
+                },
+            });
+
+            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            if (base64Audio) {
+                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+                const audioBuffer = await decodeAudioData(decodeBase64(base64Audio), ctx, 24000, 1);
+                const source = ctx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(ctx.destination);
+                source.onended = () => setIsSpeaking(false);
+                audioRef.current = source;
+                source.start();
+            } else {
+                setIsSpeaking(false);
+            }
+        } catch (e) {
+            console.error("TTS failed", e);
+            setIsSpeaking(false);
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-[#1a1618] animate-fade-in">
-             <div className="h-1 w-full bg-white/10 fixed top-0 left-0 z-[70]">
-                 <div className="h-full bg-teal-500 transition-all duration-150" style={{ width: `${scrollProgress}%` }}></div>
-             </div>
+    const handleInterpretation = async () => {
+        setIsInterpreting(true);
+        const res = await getExerciseInterpretation(lesson.title, scores, lesson.description);
+        setInterpretation(res);
+        setIsInterpreting(false);
+    };
 
-             <div className="flex-none px-6 py-4 flex justify-between items-center bg-[#1a1618]/80 backdrop-blur-xl border-b border-white/10 z-[60]">
-                <button 
-                    onClick={onClose}
-                    className="text-white/80 hover:text-white flex items-center gap-2 text-sm font-bold tracking-wide transition-colors"
-                >
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                        </svg>
-                    </div>
+    return (
+        <div className="fixed inset-0 z-[120] flex flex-col bg-[#110d12] animate-fade-in overflow-y-auto">
+             <div className="flex-none px-6 py-4 flex justify-between items-center bg-[#110d12]/95 backdrop-blur-xl border-b border-white/10 sticky top-0 z-10">
+                <button onClick={onClose} className="text-white hover:text-white/80 flex items-center gap-2 text-sm font-semibold tracking-wide heading-font">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
                     Back
                 </button>
-                <div className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-full tracking-wider shadow-sm ${
-                    lesson.type === 'Reading' ? 'bg-blue-500/20 text-blue-200 border border-blue-500/20' :
-                    lesson.type === 'Exercise' ? 'bg-orange-500/20 text-orange-200 border border-orange-500/20' :
-                    'bg-purple-500/20 text-purple-200 border border-purple-500/20'
-                }`}>
-                    {lesson.type}
+                <div className="flex gap-3">
+                    <button 
+                      onClick={handleReadAloud} 
+                      className={`p-2 rounded-full transition-all ${isSpeaking ? 'bg-rose-500 text-white animate-pulse' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                      title="Read Aloud"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                        </svg>
+                    </button>
+                    <div className="text-[10px] font-bold uppercase px-4 py-1.5 rounded-full bg-rose-500/20 text-rose-200 border border-rose-500/30 heading-font">{lesson.type}</div>
                 </div>
              </div>
 
-             <div 
-                ref={contentRef}
-                onScroll={handleScroll}
-                className="flex-grow overflow-y-auto"
-             >
-                 <div className="max-w-2xl mx-auto px-6 py-10 md:py-16">
-                    <div className="mb-12 border-b border-white/10 pb-8">
-                         <h1 className="text-3xl md:text-5xl font-light text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70 mb-4 leading-tight">
-                            {lesson.title}
-                        </h1>
-                        <p className="text-lg text-white/50 font-light leading-relaxed">
-                            {lesson.description}
-                        </p>
-                    </div>
-                    
-                    <div className="space-y-6">
-                        <Markdown
-                            components={{
-                                h1: ({node, ...props}) => <h1 className="text-2xl font-medium text-rose-200 mt-10 mb-4" {...props} />,
-                                h2: ({node, ...props}) => <h2 className="text-xl font-medium text-teal-200 mt-10 mb-4 border-l-2 border-teal-500/50 pl-4" {...props} />,
-                                h3: ({node, ...props}) => <h3 className="text-lg font-bold text-white mt-8 mb-3" {...props} />,
-                                p: ({node, ...props}) => <p className="text-lg text-white/80 leading-relaxed mb-6 font-light" {...props} />,
-                                ul: ({node, ...props}) => <ul className="space-y-2 mb-8" {...props} />,
-                                ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-2 mb-8 text-white/80" {...props} />,
-                                li: ({node, ...props}) => <CheckableListItem {...props} />, 
-                                blockquote: ({node, ...props}) => (
-                                    <blockquote className="border-l-4 border-rose-400/50 bg-rose-900/10 p-6 rounded-r-xl italic text-rose-100 my-8">
-                                        {props.children}
-                                    </blockquote>
-                                ),
-                                strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
-                            }}
-                        >
-                            {lesson.longContent}
-                        </Markdown>
-                    </div>
+             <div className="max-w-2xl mx-auto px-6 py-12 lesson-content">
+                <h1 className="text-4xl md:text-5xl font-medium text-white mb-6 leading-tight">{lesson.title}</h1>
+                <p className="text-xl text-rose-200/80 mb-12 italic font-light">{lesson.description}</p>
+                
+                <div className="space-y-8">
+                    <Markdown components={{
+                        h1: ({node, ...props}) => <h1 className="text-3xl font-medium text-rose-300 mt-12 mb-6" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-2xl font-medium text-teal-300 mt-10 mb-5" {...props} />,
+                        p: ({node, ...props}) => <p className="text-xl text-white leading-relaxed mb-8" {...props} />,
+                        li: ({node, index, children, ...props}) => lesson.type === 'Exercise' ? 
+                            <ScoreItem 
+                                value={scores[children?.toString().substring(0,30) || 'item'] || 0} 
+                                onChange={(val) => setScores(s => ({...s, [children?.toString().substring(0,30) || 'item']: val}))}
+                            >
+                                {children}
+                            </ScoreItem> : 
+                            <InteractiveListItem {...props}>{children}</InteractiveListItem>
+                    }}>{lesson.longContent}</Markdown>
+                </div>
 
-                    <div className="mt-16 bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-sm">
-                        <div className="flex items-center gap-3 mb-4 text-teal-300">
-                             <span className="w-5 h-5 flex items-center justify-center">✨</span>
-                             <h3 className="text-lg font-bold">Your Reflection</h3>
-                        </div>
-                        <p className="text-white/60 text-sm mb-4">Take a moment to write down one key takeaway or intention from this session.</p>
-                        <textarea 
-                            value={reflection}
-                            onChange={(e) => setReflection(e.target.value)}
-                            placeholder="I noticed that..."
-                            className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder-white/20 min-h-[120px] focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition-all resize-none"
-                        />
-                    </div>
-
-                    <div className="mt-10 flex justify-center pb-20">
-                        <button 
-                            onClick={() => { onComplete(); onClose(); }}
-                            className="group relative bg-white text-slate-900 font-bold py-5 px-12 rounded-full shadow-2xl shadow-white/10 transition-all hover:scale-105 active:scale-95 overflow-hidden"
-                        >
-                            <span className="relative z-10 flex items-center gap-2">
-                                Complete Lesson
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 group-hover:translate-x-1 transition-transform">
-                                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                                </svg>
+                {lesson.type === 'Exercise' && !interpretation && (
+                    <button 
+                        onClick={handleInterpretation} 
+                        disabled={isInterpreting} 
+                        className="w-full mt-16 bg-rose-500 hover:bg-rose-400 text-white font-bold py-6 rounded-3xl shadow-2xl transition-all active:scale-95 heading-font text-lg tracking-wide"
+                    >
+                        {isInterpreting ? (
+                            <span className="flex items-center justify-center gap-2">
+                                <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                                Analyzing results...
                             </span>
-                            <div className="absolute inset-0 bg-gradient-to-r from-teal-200 to-rose-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300 mix-blend-screen"></div>
-                        </button>
+                        ) : 'Get Interpretation'}
+                    </button>
+                )}
+
+                {interpretation && (
+                    <div className="mt-16 p-8 bg-white/5 border border-white/10 rounded-3xl animate-fade-in-up">
+                        <h3 className="text-rose-400 font-semibold tracking-widest text-sm mb-6 heading-font uppercase">AI Synthesis</h3>
+                        <Markdown className="prose prose-invert prose-rose max-w-none">{interpretation}</Markdown>
                     </div>
-                 </div>
+                )}
+
+                {(lesson.type !== 'Exercise' || interpretation) && (
+                    <button 
+                        onClick={() => onComplete(scores)} 
+                        className="w-full mt-12 bg-white text-slate-900 font-bold py-6 rounded-3xl shadow-2xl hover:bg-slate-100 transition-all active:scale-95 heading-font text-lg tracking-wide"
+                    >
+                        Complete Session
+                    </button>
+                )}
              </div>
         </div>
     );
 };
 
-const ModuleDetailView: React.FC<{ 
-    module: CourseModule, 
-    onClose: () => void,
-    onUpdateModule: (updated: CourseModule) => void 
-}> = ({ module, onClose, onUpdateModule }) => {
-  const [lessons, setLessons] = useState<Lesson[]>(module.content || []);
-  const [loading, setLoading] = useState(!module.content);
-  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+const ModuleDetailView: React.FC<{ module: CourseModule, userData: UserData | null, onClose: () => void, onUpdateModule: (updated: CourseModule) => void, onScoreUpdate: () => void }> = ({ module, userData, onClose, onUpdateModule, onScoreUpdate }) => {
+    const [lessons, setLessons] = useState<Lesson[]>(module.content || []);
+    const [loading, setLoading] = useState(!module.content);
+    const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
 
-  useEffect(() => {
-    if (!module.content) {
-        const fetchContent = async () => {
-            const data = await generateModuleContent(module.title);
-            setLessons(data);
-            setLoading(false);
-            onUpdateModule({ ...module, content: data });
-        };
-        fetchContent();
-    }
-  }, [module]);
+    useEffect(() => {
+        if (!module.content) {
+            generateModuleContent(module.title).then(data => { setLessons(data); setLoading(false); onUpdateModule({...module, content: data}); });
+        }
+    }, [module]);
 
-  const handleLessonComplete = (lessonToMark: Lesson) => {
-      const updatedLessons = lessons.map(l => l.title === lessonToMark.title ? { ...l, isCompleted: true } : l);
-      setLessons(updatedLessons);
-      
-      const allDone = updatedLessons.every(l => l.isCompleted);
-      onUpdateModule({ 
-          ...module, 
-          content: updatedLessons, 
-          status: allDone ? 'completed' : module.status 
-      });
-  };
+    const handleComplete = async (lesson: Lesson, scores?: Record<string, number>) => {
+        const updated = lessons.map(l => l.title === lesson.title ? {...l, isCompleted: true} : l);
+        setLessons(updated);
+        setActiveLesson(null);
+        if (scores && userData) {
+            const categories = ['Communication', 'Intimacy', 'Trust', 'Conflict', 'Shared Vision'];
+            const avg = Object.values(scores).length > 0 ? Object.values(scores).reduce((a,b)=>a+b,0) / Object.values(scores).length : 5;
+            const score: BondScore = { category: categories[Math.floor(Math.random()*5)], score: Math.round(avg), timestamp: Date.now() };
+            await cloudService.saveBondScore(userData.partnerCode || 'default', score);
+            onScoreUpdate();
+        }
+        onUpdateModule({...module, content: updated, status: updated.every(l => l.isCompleted) ? 'completed' : module.status});
+    };
 
-  return (
-    <>
-        {activeLesson && (
-            <LessonView 
-                lesson={activeLesson} 
-                onClose={() => setActiveLesson(null)} 
-                onComplete={() => handleLessonComplete(activeLesson)}
-            />
-        )}
-
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/95 backdrop-blur-xl animate-fade-in p-6 overflow-hidden">
-            <button 
-                onClick={onClose}
-                className="self-start text-white/60 hover:text-white mb-6 flex items-center gap-2"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+    return (
+        <div className="fixed inset-0 z-[110] bg-[#1a1618] overflow-y-auto p-6 md:p-12 animate-fade-in">
+            {activeLesson && <LessonView lesson={activeLesson} userData={userData} onClose={()=>setActiveLesson(null)} onComplete={(s)=>handleComplete(activeLesson, s)} />}
+            
+            <button onClick={onClose} className="text-white/50 mb-10 flex items-center gap-2 hover:text-white transition-colors heading-font tracking-widest text-xs uppercase">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                 </svg>
-                Back to Dashboard
+                Dashboard
             </button>
 
-            <div className="flex-grow max-w-lg w-full mx-auto space-y-6 overflow-y-auto pb-20 custom-scrollbar">
-                <header>
-                    <div className="text-xs font-bold text-teal-400 uppercase tracking-widest mb-2">{module.duration}</div>
-                    <h2 className="text-3xl font-light text-white mb-2">{module.title}</h2>
-                    <p className="text-white/70 leading-relaxed">{module.description}</p>
-                </header>
-
-                <div className="border-t border-white/10 my-6"></div>
+            <div className="max-w-xl mx-auto">
+                <div className="mb-12">
+                    <h2 className="text-5xl font-light text-white mb-4 leading-tight">{module.title}</h2>
+                    <p className="text-xl text-white/50 font-light">{module.description}</p>
+                </div>
 
                 {loading ? (
-                    <div className="space-y-4 animate-pulse">
-                        <p className="text-white/40 text-center text-sm mb-4">AI is crafting your personalized curriculum...</p>
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="bg-white/5 rounded-2xl h-24 border border-white/10"></div>
-                        ))}
+                    <div className="space-y-6">
+                        {[1,2,3].map(i=><div key={i} className="h-28 bg-white/5 rounded-3xl animate-pulse"/>)}
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <h3 className="text-white font-medium mb-4">This Week's Curriculum</h3>
-                        {lessons.map((lesson, idx) => (
+                        <h3 className="text-xs font-semibold text-rose-400 uppercase tracking-widest mb-4 heading-font">Session List</h3>
+                        {lessons.map((l, i) => (
                             <button 
-                                key={idx} 
-                                onClick={() => setActiveLesson(lesson)}
-                                className="w-full text-left group bg-white/5 border border-white/10 p-5 rounded-2xl hover:bg-white/10 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm relative overflow-hidden"
+                                key={i} 
+                                onClick={()=>setActiveLesson(l)} 
+                                className="w-full text-left glass-panel p-6 rounded-3xl border border-white/10 flex justify-between items-center group hover:bg-white/10 transition-all hover:translate-x-1"
                             >
-                                <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity text-white/40">
-                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                                    </svg>
-                                </div>
-
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md tracking-wider ${
-                                        lesson.type === 'Reading' ? 'bg-blue-500/10 text-blue-200' :
-                                        lesson.type === 'Exercise' ? 'bg-orange-500/10 text-orange-200' :
-                                        'bg-purple-500/10 text-purple-200'
-                                    }`}>
-                                        {lesson.type}
-                                    </span>
-                                    {lesson.isCompleted && (
-                                        <div className="w-6 h-6 rounded-full bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                                                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                                <div className="flex items-center gap-5">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${l.isCompleted ? 'bg-teal-500/20 border-teal-500/40' : 'bg-white/5 border-white/10'}`}>
+                                        {l.isCompleted ? (
+                                            <svg className="w-6 h-6 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                                             </svg>
-                                        </div>
-                                    )}
+                                        ) : (
+                                            <span className="text-white/30 font-bold heading-font">{i+1}</span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h4 className={`text-xl font-medium ${l.isCompleted ? 'text-white/30 line-through' : 'text-white'}`}>{l.title}</h4>
+                                        <p className="text-xs tracking-widest text-rose-400/80 font-semibold heading-font uppercase">{l.type}</p>
+                                    </div>
                                 </div>
-                                <h4 className={`text-lg font-bold mb-1 transition-colors ${lesson.isCompleted ? 'text-white/40 line-through' : 'text-white'}`}>{lesson.title}</h4>
-                                <p className={`text-sm ${lesson.isCompleted ? 'text-white/30' : 'text-white/60'} font-light`}>{lesson.description}</p>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white/20 group-hover:text-white transition-colors">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                </svg>
                             </button>
                         ))}
                     </div>
                 )}
             </div>
         </div>
-    </>
-  );
+    );
 };
 
-const CourseModuleCard: React.FC<{ 
-    module: CourseModule, 
-    index: number, 
-    onClick: () => void 
-}> = ({ module, index, onClick }) => (
-    <button 
-        onClick={onClick}
-        disabled={module.status === 'locked'}
-        className={`w-full text-left glass-panel p-5 rounded-2xl border border-white/40 relative flex items-center gap-4 transition-all duration-300
-            ${module.status === 'locked' ? 'opacity-60 cursor-not-allowed' : 'bg-white/40 hover:scale-[1.02] hover:bg-white/50 cursor-pointer shadow-md'}`}
-    >
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-sm transition-colors
-            ${module.status === 'completed' ? 'bg-teal-400 text-white' : 
-              module.status === 'active' ? 'bg-rose-400 text-white animate-pulse' : 'bg-slate-300 text-slate-500'}`}>
-            {module.status === 'completed' ? '✓' : index + 1}
-        </div>
-        <div className="flex-grow">
-            <h4 className="text-slate-800 font-bold text-sm">{module.title}</h4>
-            <p className="text-slate-600 text-xs mt-1">{module.description}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-             <div className="text-xs font-medium text-slate-500 bg-white/40 px-2 py-1 rounded-lg border border-white/30 whitespace-nowrap">
-                {module.duration}
-            </div>
-            {module.status !== 'locked' && (
-                <span className="text-[10px] font-bold text-rose-700 bg-rose-100/50 px-2 py-0.5 rounded-full">
-                    {module.status === 'active' ? 'OPEN' : 'REVIEW'}
-                </span>
-            )}
-        </div>
-    </button>
-);
-
-const Dashboard: React.FC<DashboardProps> = ({ userData }) => {
+const Dashboard: React.FC<DashboardProps> = ({ userData, onNavigate }) => {
   const [courseModules, setCourseModules] = useState<CourseModule[]>([]);
+  const [bondScores, setBondScores] = useState<BondScore[]>([]);
   const [loadingPath, setLoadingPath] = useState(false);
   const [selectedModule, setSelectedModule] = useState<CourseModule | null>(null);
+
+  const fetchScores = async () => {
+    if (userData) {
+        const scores = await cloudService.getBondScores(userData.partnerCode || 'default');
+        setBondScores(scores);
+    }
+  };
 
   useEffect(() => {
     const savedPath = localStorage.getItem('bonds_learning_path');
     if (savedPath) {
         setCourseModules(JSON.parse(savedPath));
     } else if (userData) {
-        const fetchPath = async () => {
-            setLoadingPath(true);
-            const path = await generateLearningPath();
+        setLoadingPath(true);
+        generateLearningPath().then(path => {
             setCourseModules(path);
             localStorage.setItem('bonds_learning_path', JSON.stringify(path));
             setLoadingPath(false);
-        };
-        fetchPath();
+        });
     }
+    fetchScores();
   }, [userData]);
 
   const updateModule = (updated: CourseModule) => {
       const newModules = courseModules.map(m => m.title === updated.title ? updated : m);
       setCourseModules(newModules);
       localStorage.setItem('bonds_learning_path', JSON.stringify(newModules));
-      if (selectedModule?.title === updated.title) {
-          setSelectedModule(updated);
-      }
-  };
-
-  const handleModuleClick = (module: CourseModule) => {
-      if (module.status !== 'locked') {
-          setSelectedModule(module);
-      }
   };
 
   return (
-    <>
-        {selectedModule && (
-            <ModuleDetailView 
-                module={selectedModule} 
-                onClose={() => setSelectedModule(null)} 
-                onUpdateModule={updateModule}
-            />
-        )}
+    <div className="p-2 md:p-4 pb-20 transition-opacity duration-300">
+        {selectedModule && <ModuleDetailView module={selectedModule} userData={userData} onClose={()=>setSelectedModule(null)} onUpdateModule={updateModule} onScoreUpdate={fetchScores} />}
         
-        <div className={`p-2 md:p-4 pb-20 transition-opacity duration-300 ${selectedModule ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
-        <header className="mb-8 mt-4 text-center animate-fade-in">
-            <p className="text-white/90 font-bold tracking-widest uppercase text-[10px] mb-2 drop-shadow-sm">Daily Focus</p>
-            <h1 className="text-4xl font-light text-white tracking-tight drop-shadow-md">
+        <header className="mb-10 mt-6 text-center animate-fade-in">
+            <h1 className="text-5xl md:text-6xl font-light text-white tracking-tight mb-2">
             {userData ? `Hi, ${userData.userName}.` : 'Ready to Connect?'}
             </h1>
-            {userData && (
-                <p className="text-white/90 text-sm mt-1 font-medium drop-shadow-sm">
-                    Let's strengthen your bond with {userData.partnerName}.
-                </p>
-            )}
+            {userData && <p className="text-rose-400 text-sm font-semibold tracking-widest heading-font uppercase">Partner Portal: {userData.partnerName}</p>}
         </header>
         
-        <div className="animate-fade-in-up max-w-xl mx-auto space-y-8" style={{animationDelay: '0.1s'}}>
+        <div className="animate-fade-in-up max-w-xl mx-auto space-y-6" style={{animationDelay: '0.1s'}}>
             <DailyPrompt />
 
+            <button 
+                onClick={() => onNavigate && onNavigate(View.Mediation)} 
+                className="w-full glass-panel rounded-[2rem] p-6 shadow-2xl border-white/5 relative overflow-hidden bg-gradient-to-br from-rose-500/10 to-indigo-500/10 text-left group hover:scale-[1.02] transition-all"
+            >
+                <div className="flex items-center gap-5">
+                    <div className="w-14 h-14 bg-rose-500/20 rounded-2xl flex items-center justify-center border border-rose-500/30 group-hover:bg-rose-500/40 transition-colors">
+                        <ScaleIcon className="w-7 h-7 text-rose-300" />
+                    </div>
+                    <div>
+                        <h3 className="text-2xl text-white font-normal tracking-wide heading-font">Conflict Navigator</h3>
+                        <p className="text-white/50 text-sm font-light italic">Real-time mediation for heated moments.</p>
+                    </div>
+                </div>
+            </button>
+
+            <BondMap scores={bondScores} />
+
             {userData && (
-                <div className="animate-fade-in-up" style={{animationDelay: '0.2s'}}>
-                    <div className="flex items-center justify-between mb-4 px-2">
-                        <h2 className="text-white font-light text-xl tracking-tight drop-shadow-sm">Your Growth Path</h2>
-                        <span className="text-xs text-white/80 bg-white/10 px-2 py-1 rounded-lg">Personalized Course</span>
+                <div className="animate-fade-in-up pt-4" style={{animationDelay: '0.2s'}}>
+                    <div className="flex items-center justify-between mb-6 px-2">
+                        <h2 className="text-3xl font-light text-white tracking-wide heading-font">Growth Path</h2>
                     </div>
                     
-                    <div className="space-y-3 relative">
-                        <div className="absolute left-[29px] top-6 bottom-6 w-0.5 bg-white/30 z-0"></div>
-
+                    <div className="space-y-4">
                         {loadingPath ? (
-                            <div className="p-6 text-center text-white/70 animate-pulse bg-white/10 rounded-2xl">
-                                Designing your custom relationship curriculum...
-                            </div>
+                            <div className="p-12 text-center text-white/40 animate-pulse bg-white/5 rounded-[2rem]">Designing your journey...</div>
                         ) : (
                             courseModules.map((module, idx) => (
-                                <CourseModuleCard 
-                                    key={idx} 
-                                    module={module} 
-                                    index={idx} 
-                                    onClick={() => handleModuleClick(module)}
-                                />
+                                <button 
+                                    key={idx}
+                                    onClick={() => setSelectedModule(module)}
+                                    disabled={module.status === 'locked'}
+                                    className={`w-full text-left glass-panel p-6 rounded-[2rem] border border-white/5 relative flex items-center gap-6 transition-all duration-300
+                                        ${module.status === 'locked' ? 'opacity-40 grayscale cursor-not-allowed' : 'bg-white/5 hover:bg-white/10 cursor-pointer shadow-xl hover:translate-y-[-2px]'}`}
+                                >
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xl heading-font shrink-0 shadow-sm transition-colors
+                                        ${module.status === 'completed' ? 'bg-teal-500 text-white' : 
+                                        module.status === 'active' ? 'bg-rose-500 text-white animate-pulse' : 'bg-white/10 text-white/20'}`}>
+                                        {module.status === 'completed' ? '✓' : idx + 1}
+                                    </div>
+                                    <div className="flex-grow">
+                                        <h4 className="text-2xl font-normal text-white leading-tight">{module.title}</h4>
+                                        <p className="text-white/50 text-xs font-semibold tracking-widest mt-1 heading-font uppercase">{module.duration} • {module.status}</p>
+                                    </div>
+                                </button>
                             ))
                         )}
                     </div>
                 </div>
             )}
-
             <AICoach />
         </div>
-        </div>
-    </>
+    </div>
   );
 };
 

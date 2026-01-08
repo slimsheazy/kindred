@@ -8,28 +8,33 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cardo:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
       body {
-        font-family: 'Lexend', sans-serif;
-        background: linear-gradient(125deg, #c79060 0%, #a47a74 35%, #7a6174 70%, #5e4b5c 100%);
+        font-family: 'Cardo', serif;
+        background: linear-gradient(125deg, #2d242f 0%, #1a1618 100%);
         background-attachment: fixed;
-        color: #1e293b;
+        color: rgba(248, 250, 252, 0.95); /* Lighter default text */
+      }
+      h1, h2, h3, h4, .heading-font {
+        font-family: 'Montserrat', sans-serif;
+        letter-spacing: 0.01em;
+        /* Removed global text-transform: uppercase */
       }
       .glass-panel {
-        background: rgba(255, 255, 255, 0.75);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
       .glass-input {
-        background: rgba(255, 255, 255, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(10px);
       }
       .glass-input:focus {
-        background: rgba(255, 255, 255, 0.3);
-        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.3);
       }
       
       @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -42,7 +47,22 @@
 
       ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 3px; }
+      ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+
+      /* Improved readability for markdown content */
+      .lesson-content p {
+        font-size: 1.25rem;
+        line-height: 1.8;
+        margin-bottom: 1.75rem;
+        color: rgba(255, 255, 255, 0.98);
+      }
+      
+      /* Target Montserrat specific weights */
+      .font-light { font-weight: 300; }
+      .font-normal { font-weight: 400; }
+      .font-medium { font-weight: 500; }
+      .font-semibold { font-weight: 600; }
+      .font-bold { font-weight: 700; }
     </style>
 <script type="importmap">
 {
@@ -57,7 +77,7 @@
 }
 </script>
 </head>
-<body class="min-h-screen text-slate-800 antialiased selection:bg-rose-200 selection:text-rose-900">
+<body class="min-h-screen antialiased selection:bg-rose-500/30 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

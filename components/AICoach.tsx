@@ -41,24 +41,24 @@ const AICoach: React.FC = () => {
   };
 
   return (
-    <div className="glass-panel rounded-3xl mt-6 shadow-xl overflow-hidden flex flex-col h-[500px]">
-        <div className="flex items-center text-rose-700 p-5 border-b border-rose-100/50 bg-white/20">
-            <SparklesIcon className="w-5 h-5 mr-2" />
-            <h2 className="text-lg font-bold">Relationship Coach</h2>
+    <div className="glass-panel rounded-[2rem] mt-8 shadow-xl overflow-hidden flex flex-col h-[550px] bg-white/5 border-white/5">
+        <div className="flex items-center text-rose-300 p-6 border-b border-white/5 bg-white/5">
+            <SparklesIcon className="w-5 h-5 mr-3" />
+            <h2 className="text-sm font-bold uppercase tracking-widest heading-font">Relationship Coach</h2>
         </div>
         
-        <div className="flex-grow p-5 overflow-y-auto space-y-4">
+        <div className="flex-grow p-6 overflow-y-auto space-y-6">
             {messages.map((msg, index) => (
                 <div key={index} className={`flex items-end gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'model' && (
-                      <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-xs shadow-sm">AI</div>
+                      <div className="w-8 h-8 rounded-full bg-rose-500/20 border border-rose-500/20 flex items-center justify-center text-[10px] font-bold text-rose-300 shadow-sm">AI</div>
                   )}
-                  <div className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                  <div className={`max-w-[85%] p-4 rounded-2xl text-base leading-relaxed shadow-sm ${
                       msg.role === 'user' 
-                      ? 'bg-slate-800 text-white rounded-br-none' 
-                      : 'bg-white/60 backdrop-blur-sm text-slate-800 border border-white/50 rounded-bl-none'
+                      ? 'bg-white/10 text-white border border-white/10 rounded-br-none' 
+                      : 'bg-white/5 backdrop-blur-sm text-white/90 border border-white/5 rounded-bl-none'
                   }`}>
-                      <div className="prose prose-sm max-w-none prose-p:my-0 prose-ul:my-0 prose-ol:my-0 text-inherit">
+                      <div className="prose prose-sm prose-invert max-w-none prose-p:my-0 prose-ul:my-0 prose-ol:my-0 text-inherit">
                         <Markdown>{msg.text}</Markdown>
                       </div>
                   </div>
@@ -66,12 +66,12 @@ const AICoach: React.FC = () => {
             ))}
             {isLoading && (
                 <div className="flex items-end gap-3 justify-start">
-                    <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-xs shadow-sm">AI</div>
-                    <div className="p-4 rounded-2xl bg-white/60 backdrop-blur-sm rounded-bl-none border border-white/50">
-                       <div className="flex items-center space-x-1.5">
-                          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
-                          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center text-[10px] font-bold text-rose-300 shadow-sm">AI</div>
+                    <div className="p-5 rounded-2xl bg-white/5 backdrop-blur-sm rounded-bl-none border border-white/5">
+                       <div className="flex items-center space-x-2">
+                          <div className="w-1.5 h-1.5 bg-white/30 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
+                          <div className="w-1.5 h-1.5 bg-white/30 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                          <div className="w-1.5 h-1.5 bg-white/30 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                        </div>
                     </div>
                 </div>
@@ -79,18 +79,18 @@ const AICoach: React.FC = () => {
             <div ref={chatEndRef} />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 bg-white/30 border-t border-white/40 flex items-center gap-2">
+        <form onSubmit={handleSubmit} className="p-5 bg-white/5 border-t border-white/5 flex items-center gap-3">
             <input
                 type="text"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Ask for advice..."
-                className="flex-grow py-3 px-4 bg-white/60 rounded-full border border-white/40 focus:bg-white focus:ring-2 focus:ring-rose-200/50 focus:outline-none transition text-sm placeholder-slate-500"
+                placeholder="Ask for perspective..."
+                className="flex-grow py-4 px-6 bg-white/5 rounded-full border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-white/20 focus:outline-none transition text-sm text-white placeholder-white/20"
             />
             <button 
                 type="submit" 
                 disabled={!userInput.trim() || isLoading}
-                className="bg-slate-900 text-white rounded-full p-3 hover:bg-slate-800 transition-colors disabled:opacity-50 shadow-md"
+                className="bg-white text-slate-900 rounded-full p-4 hover:bg-slate-100 transition-all disabled:opacity-20 shadow-md active:scale-90"
             >
                 <PaperAirplaneIcon className="w-5 h-5" />
             </button>

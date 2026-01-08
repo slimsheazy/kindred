@@ -7,6 +7,7 @@ export enum View {
   Activities = 'ACTIVITIES',
   Goals = 'GOALS',
   Profile = 'PROFILE',
+  Mediation = 'MEDIATION',
 }
 
 export interface UserData {
@@ -18,6 +19,12 @@ export interface UserData {
   partnerCode?: string;
   linkedPartnerId?: string;
   syncStatus: 'synced' | 'syncing' | 'offline';
+}
+
+export interface BondScore {
+  category: string;
+  score: number;
+  timestamp: number;
 }
 
 export interface Lesson {

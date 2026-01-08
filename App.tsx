@@ -8,6 +8,7 @@ import Journal from './views/Journal';
 import Goals from './views/Goals';
 import Profile from './views/Profile';
 import Onboarding from './views/Onboarding';
+import ConflictNavigator from './components/ConflictNavigator';
 import { initializeGeminiContext } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -61,7 +62,7 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case View.Dashboard:
-        return <Dashboard userData={userData} />;
+        return <Dashboard userData={userData} onNavigate={setCurrentView} />;
       case View.Activities:
         return <Activities userData={userData} />;
       case View.Journal:
@@ -70,8 +71,10 @@ const App: React.FC = () => {
         return <Goals />;
       case View.Profile:
         return <Profile onReset={handleReset} />;
+      case View.Mediation:
+        return <ConflictNavigator userData={userData} onClose={() => setCurrentView(View.Dashboard)} />;
       default:
-        return <Dashboard userData={userData} />;
+        return <Dashboard userData={userData} onNavigate={setCurrentView} />;
     }
   };
 
@@ -86,7 +89,9 @@ const App: React.FC = () => {
       <main className="flex-grow pb-24 pt-4 px-2">
         {renderView()}
       </main>
-      <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
+      {currentView !== View.Mediation && (
+        <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
+      )}
     </div>
   );
 };

@@ -12,7 +12,6 @@ declare global {
   }
 
   interface Window {
-    // Fix: Added optional modifier to match the global environment's definition of aistudio
     aistudio?: AIStudio;
   }
 }
@@ -32,9 +31,6 @@ export const initializeGeminiContext = (userData: UserData) => {
   currentUserData = userData;
 };
 
-/**
- * Handles API errors, specifically looking for key selection issues
- */
 const handleApiError = async (error: any) => {
   console.error("Gemini API Error:", error);
   const errorMessage = error?.message || "";
@@ -48,27 +44,18 @@ const handleApiError = async (error: any) => {
   return "I'm having a slight connection issue. Please make sure your API key is active and try again.";
 };
 
-/**
- * Creates a fresh AI instance for every call to ensure the latest API key is used
- */
 const getAiClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 export const getCoachingResponse = async (message: string): Promise<string> => {
-    if (!process.env.API_KEY) {
-        return "Please configure your API key to talk to the coach.";
-    }
-
+    if (!process.env.API_KEY) return "Please configure your API key.";
     try {
         const ai = getAiClient();
         const response = await ai.models.generateContent({
             model: 'gemini-3-pro-preview',
             contents: message,
-            config: {
-                systemInstruction: getSystemPrompt(),
-                temperature: 0.7,
-            }
+            config: { systemInstruction: getSystemPrompt(), temperature: 0.7 }
         });
         return response.text || "";
     } catch (error) {
@@ -76,39 +63,53 @@ export const getCoachingResponse = async (message: string): Promise<string> => {
     }
 };
 
-export const getDailyPrompt = async (): Promise<string> => {
-    if (!process.env.API_KEY) {
-        return "What's one thing you appreciate about your partner today?";
-    }
+export const getExerciseInterpretation = async (lessonTitle: string, scores: Record<string, number>, context: string): Promise<string> => {
+    if (!process.env.API_KEY) return "Interpretation unavailable.";
+    try {
+        const ai = getAiClient();
+        const scoreString = Object.entries(scores).map(([key, val]) => `${key}: ${val}/10`).join(', ');
+        const prompt = `Interpret these scores for the exercise "${lessonTitle}". 
+        Context: ${context}.
+        Scores: ${scoreString}.
+        Provide two sections: 
+        1. "Analysis": A brief, empathetic interpretation of what these scores mean for the relationship.
+        2. "Next Steps": 2-3 specific, actionable steps the couple should take today.
+        Use clear Markdown headers.`;
 
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { systemInstruction: getSystemPrompt(), temperature: 0.8 }
+        });
+        return response.text || "";
+    } catch (error) {
+        return "I couldn't generate an interpretation right now. Focus on the areas with lower scores first.";
+    }
+};
+
+export const getDailyPrompt = async (): Promise<string> => {
+    if (!process.env.API_KEY) return "What's one thing you appreciate about your partner today?";
     try {
         const ai = getAiClient();
         let promptRequest = "Generate one deep daily connection prompt for a couple.";
-        if (currentUserData) {
-            promptRequest += ` Focus on: ${currentUserData.focusAreas.join(', ')}.`;
-        }
+        if (currentUserData) promptRequest += ` Focus on: ${currentUserData.focusAreas.join(', ')}.`;
         promptRequest += " No preamble, just the prompt.";
-
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: promptRequest,
         });
         return response.text?.trim() || "";
     } catch (error) {
-        console.error("Error getting daily prompt:", error);
         return "What's a dream you haven't shared with me yet?";
     }
 }
 
 export const generateActivities = async (vibe: string): Promise<Activity[]> => {
     if (!process.env.API_KEY) return [];
-
     try {
         const ai = getAiClient();
         let prompt = `Generate 4 unique relationship activities. Vibe: ${vibe}.`;
-        if (currentUserData) {
-            prompt += ` Context: ${currentUserData.yearsTogether} together, focusing on ${currentUserData.focusAreas.join(', ')}.`;
-        }
+        if (currentUserData) prompt += ` Context: ${currentUserData.yearsTogether} together, focusing on ${currentUserData.focusAreas.join(', ')}.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
@@ -131,12 +132,7 @@ export const generateActivities = async (vibe: string): Promise<Activity[]> => {
                 }
             }
         });
-        
-        if (response.text) {
-             const data = JSON.parse(response.text);
-             return data.map((item: any) => ({ ...item, isGenerated: true }));
-        }
-        return [];
+        return response.text ? JSON.parse(response.text).map((item: any) => ({ ...item, isGenerated: true })) : [];
     } catch (error) {
         await handleApiError(error);
         return [];
@@ -145,12 +141,10 @@ export const generateActivities = async (vibe: string): Promise<Activity[]> => {
 
 export const generateLearningPath = async (): Promise<CourseModule[]> => {
     if (!process.env.API_KEY) return [];
-
     try {
         const ai = getAiClient();
         const prompt = `Create a 4-module relationship growth course for a couple focused on ${currentUserData?.focusAreas.join(', ') || 'growth'}. 
         First module status: "active", others "locked".`;
-
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: prompt,
@@ -171,7 +165,6 @@ export const generateLearningPath = async (): Promise<CourseModule[]> => {
                 }
             }
         });
-
         return response.text ? JSON.parse(response.text) : [];
     } catch (error) {
         await handleApiError(error);
@@ -181,12 +174,10 @@ export const generateLearningPath = async (): Promise<CourseModule[]> => {
 
 export const generateModuleContent = async (moduleTitle: string): Promise<Lesson[]> => {
     if (!process.env.API_KEY) return [];
-
     try {
         const ai = getAiClient();
         const prompt = `Create a 3-lesson curriculum for the module: "${moduleTitle}". Focus: ${currentUserData?.focusAreas.join(', ')}. 
-        Include detailed Markdown 'longContent' for each lesson (Reading, Exercise, or Prompt).`;
-
+        Include detailed Markdown 'longContent' for each lesson. For "Exercise" types, ensure the longContent contains a list of items to be scored 0-10.`;
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: prompt,
@@ -207,7 +198,6 @@ export const generateModuleContent = async (moduleTitle: string): Promise<Lesson
                 }
             }
         });
-
         return response.text ? JSON.parse(response.text) : [];
     } catch (error) {
         await handleApiError(error);

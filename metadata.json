@@ -1,5 +1,7 @@
 {
   "name": "Bonds Connect: An AI-Powered Couples Connection App",
   "description": "A comprehensive collaborative app designed to help couples deepen their connection through personalized daily prompts, interactive activities, shared journaling, and intelligent goal tracking—all powered by adaptive AI that learns from your unique relationship patterns.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }
