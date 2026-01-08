@@ -6,15 +6,14 @@ let currentUserData: UserData | null = null;
 
 // Declare global for AI Studio environment
 declare global {
-  // Define AIStudio interface to match the system's expected global type
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
 
   interface Window {
-    // Use the named AIStudio interface and readonly modifier to match existing global declarations
-    readonly aistudio: AIStudio;
+    // Fix: Added optional modifier to match the global environment's definition of aistudio
+    aistudio?: AIStudio;
   }
 }
 

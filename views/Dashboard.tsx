@@ -13,9 +13,17 @@ interface DashboardProps {
 
 /**
  * Interactive List Item Component for Markdown
- * Handles the 'children' prop strictly to avoid TS build errors.
+ * Properly handles optional children and catches internal markdown props.
  */
-const CheckableListItem = ({ children }: { children?: React.ReactNode }) => {
+interface CheckableListItemProps {
+  children?: React.ReactNode;
+  node?: any;
+  index?: any;
+  ordered?: any;
+  siblingCount?: any;
+}
+
+const CheckableListItem: React.FC<CheckableListItemProps> = ({ children }) => {
     const [checked, setChecked] = useState(false);
     return (
         <li 
@@ -108,7 +116,7 @@ const LessonView: React.FC<{ lesson: Lesson, onClose: () => void, onComplete: ()
                                 p: ({node, ...props}) => <p className="text-lg text-white/80 leading-relaxed mb-6 font-light" {...props} />,
                                 ul: ({node, ...props}) => <ul className="space-y-2 mb-8" {...props} />,
                                 ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-2 mb-8 text-white/80" {...props} />,
-                                li: ({children}) => <CheckableListItem>{children}</CheckableListItem>, 
+                                li: ({node, ...props}) => <CheckableListItem {...props} />, 
                                 blockquote: ({node, ...props}) => (
                                     <blockquote className="border-l-4 border-rose-400/50 bg-rose-900/10 p-6 rounded-r-xl italic text-rose-100 my-8">
                                         {props.children}
