@@ -20,7 +20,7 @@ const DailyPrompt: React.FC = () => {
         const parsed = JSON.parse(savedUser);
         setUserData(parsed);
         
-        // BABY STEP: Setup real-time listener
+        // Setup real-time listener with a safety check for the subscription object
         const subscription = cloudService.subscribeToPartner(
             parsed.partnerCode || 'default', 
             parsed.id, 
@@ -30,7 +30,11 @@ const DailyPrompt: React.FC = () => {
             }
         );
 
-        return () => { subscription.unsubscribe(); };
+        return () => { 
+            if (subscription && typeof subscription.unsubscribe === 'function') {
+                subscription.unsubscribe(); 
+            }
+        };
     }
   }, []);
 

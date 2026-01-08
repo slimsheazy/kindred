@@ -1,12 +1,18 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { MOCK_JOURNAL_ENTRIES } from '../constants';
 import type { JournalEntry, UserData } from '../types';
 import { cloudService } from '../services/cloudService';
 
 const JournalEntryCard: React.FC<{ entry: JournalEntry }> = ({ entry }) => (
   <div className="glass-panel rounded-3xl p-6 shadow-lg animate-fade-in-up">
     <div className="flex items-center mb-4">
-      <img src={entry.authorImage} alt={entry.author} className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm" />
+      {entry.authorImage ? (
+        <img src={entry.authorImage} alt={entry.author} className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm" />
+      ) : (
+        <div className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm bg-rose-200 flex items-center justify-center text-rose-700 font-bold text-xs uppercase">
+          {entry.author.substring(0, 2)}
+        </div>
+      )}
       <div>
         <p className="font-bold text-slate-800">{entry.author}</p>
         <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{entry.date}</p>
@@ -27,6 +33,7 @@ const Journal: React.FC = () => {
   const [newText, setNewText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
 
@@ -40,13 +47,10 @@ const Journal: React.FC = () => {
   }, []);
 
   const loadEntries = async (code: string) => {
+    setIsLoading(true);
     const cloudEntries = await cloudService.getJournalEntries(code);
-    if (cloudEntries.length > 0) {
-        setEntries(cloudEntries);
-    } else {
-        // Fix: Removed 'as any' since MOCK_JOURNAL_ENTRIES is now correctly typed
-        setEntries(MOCK_JOURNAL_ENTRIES);
-    }
+    setEntries(cloudEntries);
+    setIsLoading(false);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,7 +74,7 @@ const Journal: React.FC = () => {
       id: Date.now().toString(),
       authorId: userData.id,
       author: userData.userName,
-      authorImage: `https://picsum.photos/seed/${userData.id}/100/100`,
+      authorImage: '', // Cleaned up random seed image
       date: 'Just now',
       timestamp: Date.now(),
       text: newText,
@@ -89,7 +93,7 @@ const Journal: React.FC = () => {
       <header className="mb-8 mt-4 flex justify-between items-end">
         <div>
           <h1 className="text-4xl font-light text-white tracking-tight">Shared Journal</h1>
-          <p className="text-white/70 mt-1">Synced with {userData?.partnerName || 'Partner'}</p>
+          <p className="text-white/70 mt-1">Capture memories with {userData?.partnerName || 'Partner'}</p>
         </div>
         <button 
           onClick={() => setShowAdd(!showAdd)}
@@ -110,7 +114,7 @@ const Journal: React.FC = () => {
             <textarea 
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
-              placeholder="What's on your mind? Thoughts about today, a shared memory, or a note of appreciation..."
+              placeholder="A shared memory, a small appreciation, or just a thought..."
               className="w-full h-32 bg-white/40 border border-white/60 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-rose-200 transition-all text-slate-800 placeholder-slate-400"
             />
             
@@ -160,11 +164,25 @@ const Journal: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-6">
-        {entries.map((entry) => (
-          <JournalEntryCard key={entry.id} entry={entry} />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="space-y-6">
+          {[1, 2].map(i => (
+            <div key={i} className="glass-panel rounded-3xl p-6 h-40 animate-pulse opacity-50" />
+          ))}
+        </div>
+      ) : entries.length > 0 ? (
+        <div className="space-y-6">
+          {entries.map((entry) => (
+            <JournalEntryCard key={entry.id} entry={entry} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-20 px-6 glass-panel rounded-3xl border-dashed border-2 border-white/30">
+           <div className="text-5xl mb-4">📖</div>
+           <h3 className="text-xl font-light text-white mb-2">Your story begins here.</h3>
+           <p className="text-white/50 text-sm">Write your first entry to share it with {userData?.partnerName}.</p>
+        </div>
+      )}
     </div>
   );
 };
