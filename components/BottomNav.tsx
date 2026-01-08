@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { View } from '../types';
-import { AbstractHomeIcon, AbstractJournalIcon, AbstractActivitiesIcon, AbstractGoalsIcon, AbstractProfileIcon } from './Icons';
 
 interface BottomNavProps {
   currentView: View;
@@ -10,40 +9,40 @@ interface BottomNavProps {
 
 const NavItem: React.FC<{
   label: string;
-  icon: React.ReactNode;
   isActive: boolean;
   onClick: () => void;
-}> = ({ label, icon, isActive, onClick }) => {
-  const activeClass = isActive ? 'text-white bg-white/10' : 'text-white/40 hover:text-white hover:bg-white/5';
-  
+}> = ({ label, isActive, onClick }) => {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center w-full h-full py-1 transition-all duration-300 rounded-xl mx-1 ${activeClass}`}
+      className={`flex flex-col items-center justify-center py-2 px-3 transition-all duration-300 relative group`}
     >
-      <div className="transform scale-90 mb-0.5">{icon}</div>
-      <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
+      <span className={`text-[10px] font-bold uppercase tracking-[0.15em] heading-font ${isActive ? 'text-[#262626]' : 'text-[#262626]/60'}`}>
+        {label}
+      </span>
+      {isActive && (
+        <div className="absolute -bottom-1 w-1 h-1 bg-[#262626] rounded-full animate-fade-in"></div>
+      )}
     </button>
   );
 };
 
 const BottomNav: React.FC<BottomNavProps> = ({ currentView, setCurrentView }) => {
   const navItems = [
-    { view: View.Dashboard, label: 'Home', icon: <AbstractHomeIcon className="w-5 h-5" /> },
-    { view: View.Journal, label: 'Journal', icon: <AbstractJournalIcon className="w-5 h-5" /> },
-    { view: View.Activities, label: 'Activities', icon: <AbstractActivitiesIcon className="w-5 h-5" /> },
-    { view: View.Goals, label: 'Goals', icon: <AbstractGoalsIcon className="w-5 h-5" /> },
-    { view: View.Profile, label: 'Profile', icon: <AbstractProfileIcon className="w-5 h-5" /> },
+    { view: View.Dashboard, label: 'Home' },
+    { view: View.Journal, label: 'Journal' },
+    { view: View.Activities, label: 'Actions' },
+    { view: View.Goals, label: 'Intent' },
+    { view: View.Profile, label: 'Profile' },
   ];
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 max-w-[calc(32rem-2rem)] mx-auto z-50">
-      <nav className="h-16 glass-panel rounded-2xl shadow-2xl flex justify-around items-center px-2 border-white/5 bg-[#1a1618]/60 backdrop-blur-2xl">
+    <div className="fixed bottom-8 left-0 right-0 z-50 flex justify-center px-6">
+      <nav className="flex justify-around items-center w-full max-w-sm bg-white/40 backdrop-blur-xl border border-[#262626]/10 rounded-full px-4 h-14 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
         {navItems.map((item) => (
           <NavItem
             key={item.view}
             label={item.label}
-            icon={item.icon}
             isActive={currentView === item.view}
             onClick={() => setCurrentView(item.view)}
           />

@@ -64,7 +64,8 @@ const App: React.FC = () => {
       case View.Dashboard:
         return <Dashboard userData={userData} onNavigate={setCurrentView} />;
       case View.Activities:
-        return <Activities userData={userData} />;
+        // FIX: Removed unused userData prop as Activities component does not accept props and the error "Property 'userData' does not exist on type 'IntrinsicAttributes'" was reported on this line.
+        return <Activities />;
       case View.Journal:
         return <Journal />;
       case View.Goals:

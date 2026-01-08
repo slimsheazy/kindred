@@ -20,50 +20,48 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
   };
 
   return (
-    <div className="p-2 md:p-4 pb-24">
-       <header className="mb-8 mt-4">
-        <h1 className="text-4xl font-light text-white tracking-tight">Profile</h1>
-        <p className="text-white/70 mt-1">Manage your shared space.</p>
+    <div className="px-6 py-12 max-w-xl mx-auto">
+       <header className="mb-16">
+        <h1 className="text-6xl font-light mb-2 text-[#000000]">Profile.</h1>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#000000]/70 heading-font">Manage your shared space</p>
       </header>
-      <div className="glass-panel rounded-3xl p-8 text-center shadow-xl">
-        <div className="relative inline-block mb-6">
-            <div className="w-28 h-28 rounded-full mx-auto bg-gradient-to-tr from-rose-200 to-teal-100 flex items-center justify-center border-4 border-white shadow-lg">
-                <span className="text-3xl font-bold text-slate-700 tracking-tighter">{getInitials()}</span>
-            </div>
-            <div className="absolute bottom-2 right-1 w-6 h-6 bg-teal-400 border-2 border-white rounded-full shadow-sm"></div>
+      
+      <div className="flex flex-col items-center mb-16">
+        <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-[#FF007F]/10 to-[#00FF41]/10 flex items-center justify-center border border-[#000000]/10 shadow-sm mb-6">
+            <span className="text-4xl font-light text-[#000000] tracking-tighter">{getInitials()}</span>
         </div>
         
-        <h2 className="text-2xl font-bold text-slate-800">
+        <h2 className="text-3xl font-light text-[#000000]">
             {userData ? `${userData.userName} & ${userData.partnerName}` : 'Your Connection'}
         </h2>
         
         {userData?.partnerCode && (
-            <div className="mt-2 flex items-center justify-center gap-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Shared Code</span>
-                <span className="text-xs font-mono font-bold text-slate-600 bg-white/50 px-2 py-0.5 rounded border border-white/40">{userData.partnerCode}</span>
+            <div className="mt-4 flex flex-col items-center gap-1">
+                <span className="text-[10px] font-bold text-[#000000]/40 uppercase tracking-widest">Shared Code</span>
+                <span className="text-sm font-mono font-bold text-[#000000] tracking-widest">{userData.partnerCode}</span>
             </div>
         )}
+      </div>
 
-        <div className="mt-8 space-y-3">
-            {['Relationship Settings', 'Privacy & Sync', 'App Appearance', 'Support'].map(item => (
-                <button key={item} className="w-full flex justify-between items-center p-4 bg-white/40 rounded-xl hover:bg-white/60 transition-colors text-slate-700 font-medium border border-white/40 text-sm">
-                    {item}
-                    <span className="text-slate-400 text-lg">›</span>
-                </button>
-            ))}
-        </div>
-        
-        <div className="pt-10 space-y-4">
-            <button 
-                onClick={onReset}
-                className="w-full bg-slate-900 text-white font-bold py-4 px-4 rounded-xl hover:bg-slate-800 transition-all shadow-lg text-sm"
-            >
-                Reset Account
-            </button>
-            <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                Resetting will clear all local data, including your journal, goals, and learning path.
-            </p>
-        </div>
+      <div className="space-y-2 mb-24">
+          {['Relationship Settings', 'Privacy & Sync', 'App Appearance', 'Support'].map(item => (
+              <button key={item} className="w-full text-left py-8 border-b border-[#000000]/10 flex justify-between items-center group">
+                  <span className="text-2xl font-light text-[#000000] group-hover:pl-4 transition-all">{item}</span>
+                  <span className="text-xs font-bold text-[#000000]/20">Explore</span>
+              </button>
+          ))}
+      </div>
+      
+      <div className="space-y-6">
+          <button 
+              onClick={onReset}
+              className="w-full border border-[#000000] text-[#000000] font-bold py-6 rounded-full hover:bg-[#000000] hover:text-white transition-all text-xs tracking-[0.2em] uppercase heading-font"
+          >
+              Reset Account
+          </button>
+          <p className="text-[10px] text-[#000000]/40 font-bold uppercase tracking-widest text-center leading-relaxed heading-font">
+              Resetting will clear all local data, including your journal, goals, and learning path.
+          </p>
       </div>
     </div>
   );

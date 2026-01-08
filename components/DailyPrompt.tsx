@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { getDailyPrompt } from '../services/geminiService';
 import { cloudService } from '../services/cloudService';
-import { ChatBubbleLeftRightIcon } from './Icons';
 import { UserData } from '../types';
 
 const DailyPrompt: React.FC = () => {
@@ -19,21 +18,11 @@ const DailyPrompt: React.FC = () => {
     if (savedUser) {
         const parsed = JSON.parse(savedUser);
         setUserData(parsed);
-        
-        const subscription = cloudService.subscribeToPartner(
-            parsed.partnerCode || 'default', 
-            parsed.id, 
-            (answer) => {
-                setPartnerAnswer(answer);
-                setPartnerAnswerSubmitted(true);
-            }
-        );
-
-        return () => { 
-            if (subscription && typeof subscription.unsubscribe === 'function') {
-                subscription.unsubscribe(); 
-            }
-        };
+        const subscription = cloudService.subscribeToPartner(parsed.partnerCode || 'default', parsed.id, (answer) => {
+            setPartnerAnswer(answer);
+            setPartnerAnswerSubmitted(true);
+        });
+        return () => { if (subscription && typeof subscription.unsubscribe === 'function') subscription.unsubscribe(); };
     }
   }, []);
 
@@ -58,69 +47,56 @@ const DailyPrompt: React.FC = () => {
   const showBothAnswers = myAnswerSubmitted && partnerAnswerSubmitted;
 
   return (
-    <div className="glass-panel rounded-[2rem] p-8 shadow-xl border-white/5 bg-white/5">
-      <div className="flex items-center text-teal-300 mb-6 justify-between">
-        <div className="flex items-center">
-            <ChatBubbleLeftRightIcon className="w-5 h-5 mr-3" />
-            <h2 className="text-sm font-semibold tracking-wide heading-font">Daily Connection</h2>
-        </div>
+    <div className="py-12 animate-fade-in">
+      <div className="flex items-center text-[#262626]/70 mb-10 justify-between px-2">
+        <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] heading-font">Daily Reflection</h2>
         {myAnswerSubmitted && !partnerAnswerSubmitted && (
-            <span className="text-[9px] font-bold bg-teal-400/10 text-teal-300 px-3 py-1 rounded-full animate-pulse border border-teal-400/20">
-                SYNCING...
-            </span>
+            <span className="text-[9px] font-bold tracking-widest text-[#262626]/50 animate-pulse">Waiting for partner...</span>
         )}
       </div>
 
       {isLoading ? (
-        <div className="animate-pulse space-y-3">
-            <div className="h-5 bg-white/10 rounded-full w-full"></div>
-            <div className="h-5 bg-white/10 rounded-full w-4/5"></div>
+        <div className="animate-pulse space-y-4 px-2">
+            <div className="h-4 bg-[#262626]/10 rounded-full w-full"></div>
+            <div className="h-4 bg-[#262626]/10 rounded-full w-4/5"></div>
         </div>
       ) : (
-        <p className="text-white font-medium text-2xl leading-relaxed mb-8 text-center italic">"{prompt}"</p>
+        <p className="text-[#262626] font-medium text-3xl leading-snug mb-12 italic text-center px-4">"{prompt}"</p>
       )}
 
       {showBothAnswers ? (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-12 px-2">
           <div>
-            <p className="font-semibold text-white/40 text-[10px] tracking-widest mb-3 heading-font uppercase">Your Reflection</p>
-            <p className="bg-white/5 p-6 rounded-3xl text-white border border-white/10 shadow-sm leading-relaxed">{myAnswer}</p>
+            <p className="text-[#262626]/70 text-[9px] uppercase tracking-[0.2em] mb-4 heading-font">You</p>
+            <p className="text-xl leading-relaxed text-[#262626] border-l-2 border-[#262626]/20 pl-6">{myAnswer}</p>
           </div>
           <div className="animate-fade-in" style={{animationDelay: '0.3s'}}>
-            <p className="font-semibold text-teal-400/60 text-[10px] tracking-widest mb-3 heading-font uppercase">{userData?.partnerName || 'Partner'}'s Reflection</p>
-            <p className="bg-teal-400/5 p-6 rounded-3xl text-white border border-teal-400/20 shadow-sm leading-relaxed">{partnerAnswer}</p>
+            <p className="text-[#262626]/70 text-[9px] uppercase tracking-[0.2em] mb-4 heading-font">{userData?.partnerName || 'Partner'}</p>
+            <p className="text-xl leading-relaxed text-[#262626] border-l-2 border-[#00FF41]/60 pl-6">{partnerAnswer}</p>
           </div>
-           <button onClick={() => window.location.reload()} className="w-full mt-6 bg-white text-slate-900 font-bold py-5 px-4 rounded-3xl hover:bg-slate-100 transition-all shadow-lg active:scale-95 tracking-wide heading-font">
-            Continue Journey
+          <button onClick={() => window.location.reload()} className="w-full mt-10 border border-[#262626] text-[#262626] font-bold py-5 rounded-full hover:bg-[#262626] hover:text-white transition-all text-xs tracking-[0.2em] uppercase heading-font">
+            Renew Spirit
           </button>
         </div>
       ) : myAnswerSubmitted ? (
-        <div className="text-center py-12 bg-white/5 rounded-3xl border border-white/10 shadow-inner">
-          <p className="text-white/50 text-sm mb-4">Your spark has been shared.</p>
-          <div className="flex items-center justify-center gap-3">
-             <div className="flex gap-1.5">
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-             </div>
-             <p className="font-medium text-white/90 tracking-tight">Waiting for {userData?.partnerName || 'partner'}</p>
-          </div>
+        <div className="text-center py-20 px-2">
+          <p className="text-[#262626]/60 text-sm italic tracking-wide">Shared with {userData?.partnerName || 'Partner'}. Waiting for the link to complete.</p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="px-2">
           <textarea
             value={myAnswer}
             onChange={(e) => setMyAnswer(e.target.value)}
-            placeholder="What's in your heart?"
-            className="w-full h-36 p-6 bg-white/5 rounded-3xl border border-white/10 focus:bg-white/10 focus:border-white/20 focus:ring-0 focus:outline-none transition resize-none placeholder-white/20 text-white font-medium leading-relaxed"
+            placeholder="Type your heart here..."
+            className="w-full h-40 bg-transparent border-b border-[#262626]/20 focus:border-[#262626] focus:outline-none transition-all resize-none placeholder-[#262626]/40 text-2xl font-light italic leading-relaxed mb-6"
             disabled={isLoading}
           />
           <button
             type="submit"
-            className="w-full mt-6 bg-white text-slate-900 font-bold py-5 px-4 rounded-3xl hover:bg-slate-100 transition-all disabled:opacity-30 shadow-xl active:scale-95 tracking-wide heading-font"
+            className="w-full border border-[#262626] text-[#262626] font-bold py-5 rounded-full hover:bg-[#262626] hover:text-white transition-all disabled:opacity-20 text-xs tracking-[0.2em] uppercase heading-font"
             disabled={!myAnswer.trim() || isLoading}
           >
-            Share with {userData?.partnerName || 'Partner'}
+            Send Reflection
           </button>
         </form>
       )}

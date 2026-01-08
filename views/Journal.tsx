@@ -1,188 +1,59 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import type { JournalEntry, UserData } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { JournalEntry } from '../types';
 import { cloudService } from '../services/cloudService';
-
-const JournalEntryCard: React.FC<{ entry: JournalEntry }> = ({ entry }) => (
-  <div className="glass-panel rounded-3xl p-6 shadow-lg animate-fade-in-up">
-    <div className="flex items-center mb-4">
-      {entry.authorImage ? (
-        <img src={entry.authorImage} alt={entry.author} className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm" />
-      ) : (
-        <div className="w-10 h-10 rounded-full mr-3 border-2 border-white shadow-sm bg-rose-200 flex items-center justify-center text-rose-700 font-bold text-xs uppercase">
-          {entry.author.substring(0, 2)}
-        </div>
-      )}
-      <div>
-        <p className="font-bold text-slate-800">{entry.author}</p>
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{entry.date}</p>
-      </div>
-    </div>
-    <p className="text-slate-700 mb-4 leading-relaxed whitespace-pre-wrap">{entry.text}</p>
-    {entry.image && (
-        <div className="rounded-2xl overflow-hidden shadow-md border border-white/50 bg-slate-100">
-            <img src={entry.image} alt="Journal memory" className="w-full h-auto object-cover max-h-96" />
-        </div>
-    )}
-  </div>
-);
 
 const Journal: React.FC = () => {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [showAdd, setShowAdd] = useState(false);
   const [newText, setNewText] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [userData, setUserData] = useState<any>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('bonds_user_data');
-    if (savedUser) {
-      const user = JSON.parse(savedUser);
+    const saved = localStorage.getItem('bonds_user_data');
+    if (saved) {
+      const user = JSON.parse(saved);
       setUserData(user);
-      loadEntries(user.partnerCode || 'default');
+      cloudService.getJournalEntries(user.partnerCode || 'default').then(setEntries);
     }
   }, []);
 
-  const loadEntries = async (code: string) => {
-    setIsLoading(true);
-    const cloudEntries = await cloudService.getJournalEntries(code);
-    setEntries(cloudEntries);
-    setIsLoading(false);
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAddEntry = async (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newText.trim() || !userData) return;
-
-    const entry: JournalEntry = {
-      id: Date.now().toString(),
-      authorId: userData.id,
-      author: userData.userName,
-      authorImage: '', // Cleaned up random seed image
-      date: 'Just now',
-      timestamp: Date.now(),
-      text: newText,
-      image: selectedImage || undefined
-    };
-
+    const entry: JournalEntry = { id: Date.now().toString(), authorId: userData.id, author: userData.userName, authorImage: '', date: 'Today', timestamp: Date.now(), text: newText };
     await cloudService.saveJournalEntry(userData.partnerCode || 'default', entry);
     setEntries([entry, ...entries]);
     setNewText('');
-    setSelectedImage(null);
-    setShowAdd(false);
   };
 
   return (
-    <div className="p-2 md:p-4 pb-20">
-      <header className="mb-8 mt-4 flex justify-between items-end">
-        <div>
-          <h1 className="text-4xl font-light text-white tracking-tight">Shared Journal</h1>
-          <p className="text-white/70 mt-1">Capture memories with {userData?.partnerName || 'Partner'}</p>
-        </div>
-        <button 
-          onClick={() => setShowAdd(!showAdd)}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${
-            showAdd ? 'bg-rose-500 text-white rotate-45' : 'bg-white text-slate-800'
-          }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-        </button>
+    <div className="px-6 py-12 max-w-xl mx-auto">
+      <header className="mb-16">
+          <h1 className="text-6xl font-light mb-2 text-[#262626]">Echoes.</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#262626]/70 heading-font">A Shared Anthology</p>
       </header>
 
-      {showAdd && (
-        <div className="mb-8 glass-panel rounded-3xl p-6 shadow-xl animate-fade-in-up border-white">
-          <h3 className="text-slate-800 font-bold mb-4">Capture a moment...</h3>
-          <form onSubmit={handleAddEntry}>
-            <textarea 
-              value={newText}
-              onChange={(e) => setNewText(e.target.value)}
-              placeholder="A shared memory, a small appreciation, or just a thought..."
-              className="w-full h-32 bg-white/40 border border-white/60 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-rose-200 transition-all text-slate-800 placeholder-slate-400"
-            />
-            
-            {selectedImage && (
-                <div className="mt-4 relative rounded-2xl overflow-hidden h-40 group">
-                    <img src={selectedImage} alt="Preview" className="w-full h-full object-cover" />
-                    <button 
-                        type="button"
-                        onClick={() => setSelectedImage(null)}
-                        className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black/70 transition-colors"
-                    >
-                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-            )}
+      <form onSubmit={handleAdd} className="mb-24">
+        <textarea 
+          value={newText} 
+          onChange={(e) => setNewText(e.target.value)} 
+          placeholder="Etch a memory..." 
+          className="w-full bg-transparent border-b border-[#262626]/20 focus:border-[#262626] outline-none text-2xl font-light italic p-4 resize-none transition-all h-32 text-[#262626] placeholder-[#262626]/40"
+        />
+        <button type="submit" className="w-full mt-4 text-[10px] font-bold uppercase tracking-widest text-[#262626] border border-[#262626] py-4 rounded-full hover:bg-[#262626] hover:text-white transition-all">Archive Memory</button>
+      </form>
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              <button 
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 py-3 bg-white/60 text-slate-700 rounded-xl font-medium flex items-center justify-center gap-2 border border-white/80"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-                </svg>
-                {isUploading ? 'Loading...' : selectedImage ? 'Change Image' : 'Add Photo'}
-              </button>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleImageSelect} 
-                className="hidden" 
-                accept="image/*" 
-              />
-              <button 
-                type="submit"
-                disabled={!newText.trim() || isUploading}
-                className="flex-[2] py-3 bg-slate-900 text-white rounded-xl font-bold disabled:opacity-50 shadow-lg"
-              >
-                Save to Journal
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="space-y-6">
-          {[1, 2].map(i => (
-            <div key={i} className="glass-panel rounded-3xl p-6 h-40 animate-pulse opacity-50" />
-          ))}
-        </div>
-      ) : entries.length > 0 ? (
-        <div className="space-y-6">
-          {entries.map((entry) => (
-            <JournalEntryCard key={entry.id} entry={entry} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-20 px-6 glass-panel rounded-3xl border-dashed border-2 border-white/30">
-           <div className="text-5xl mb-4">📖</div>
-           <h3 className="text-xl font-light text-white mb-2">Your story begins here.</h3>
-           <p className="text-white/50 text-sm">Write your first entry to share it with {userData?.partnerName}.</p>
-        </div>
-      )}
+      <div className="space-y-20">
+        {entries.map(e => (
+          <div key={e.id} className="animate-fade-in">
+             <div className="flex justify-between items-center mb-6">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#262626]/80 heading-font">{e.author}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#262626]/40 heading-font">{e.date}</span>
+             </div>
+             <p className="text-2xl leading-relaxed text-[#262626] font-light">{e.text}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
