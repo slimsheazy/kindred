@@ -30,6 +30,32 @@ class CloudService {
     return userData;
   }
 
+  // --- DAILY PROMPT ---
+
+  subscribeToPartner(partnerCode: string, userId: string, callback: (answer: string) => void) {
+    // Placeholder implementation - returns a mock subscription
+    // In a real implementation, this would use Supabase realtime subscriptions
+    return { unsubscribe: () => {} };
+  }
+
+  async submitPromptAnswer(partnerCode: string, userId: string, answer: string): Promise<void> {
+    const key = `bonds_prompt_${partnerCode}`;
+    localStorage.setItem(key, JSON.stringify({ userId, answer, timestamp: Date.now() }));
+    
+    if (!this.useLocalStorageOnly) {
+      try {
+        await supabase.from('prompt_answers').upsert({
+          partner_code: partnerCode,
+          user_id: userId,
+          answer: answer,
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Failed to sync prompt answer to cloud");
+      }
+    }
+  }
+
   // --- QUIZ ANSWERS ---
 
   async saveQuizAnswer(partnerCode: string, userId: string, quizId: string, answers: any): Promise<void> {
@@ -57,7 +83,7 @@ class CloudService {
       try {
         const { data, error } = await supabase
           .from('quiz_answers')
-          .select('**')
+          .select('*')
           .eq('partner_code', partnerCode)
           .eq('quiz_id', quizId);
         if (!error && data) return data;
@@ -75,10 +101,10 @@ class CloudService {
       try {
         const { data, error } = await supabase
           .from('bond_scores')
-          .select('**')
+          .select('*')
           .eq('partner_code', partnerCode)
           .order('timestamp', { ascending: true });
-        if (!error && data) return data;
+        if (!error && data) return data as BondScore[];
       } catch (err) {
         console.warn("Supabase bond_scores fetch failed, falling back to local.");
       }
@@ -106,10 +132,10 @@ class CloudService {
       try {
         const { data, error } = await supabase
           .from('journal_entries')
-          .select('**')
+          .select('*')
           .eq('partner_code', partnerCode)
           .order('timestamp', { ascending: false });
-        if (!error && data) return data;
+        if (!error && data) return data as JournalEntry[];
       } catch (err) {
         console.warn("Supabase journal fetch failed.");
       }
@@ -137,9 +163,9 @@ class CloudService {
       try {
         const { data, error } = await supabase
           .from('goals')
-          .select('**')
+          .select('*')
           .eq('partner_code', partnerCode);
-        if (!error && data) return data;
+        if (!error && data) return data as Goal[];
       } catch (err) {
         console.warn("Supabase goals fetch failed.");
       }
