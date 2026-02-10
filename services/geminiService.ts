@@ -56,11 +56,11 @@ const handleApiError = async (error: any) => {
 };
 
 const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
 };
 
 export const getCoachingResponse = async (message: string): Promise<string> => {
-    if (!process.env.API_KEY) return "API Key not configured in environment.";
+    if (!process.env.VITE_API_KEY) return "API Key not configured in environment.";
     try {
         const ai = getAiClient();
         const response = await ai.models.generateContent({
@@ -75,8 +75,8 @@ export const getCoachingResponse = async (message: string): Promise<string> => {
 };
 
 export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion[]> => {
-    if (!process.env.API_KEY) {
-        console.error("Quiz Gen Failed: API_KEY missing.");
+    if (!process.env.VITE_API_KEY) {
+        console.error("Quiz Gen Failed: VITE_API_KEY missing.");
         return [];
     }
     try {
@@ -115,7 +115,7 @@ export const generateQuizQuestions = async (topic: string): Promise<QuizQuestion
 };
 
 export const interpretQuizResults = async (quizTitle: string, userAnswers: any[], partnerAnswers: any[]): Promise<string> => {
-    if (!process.env.API_KEY) return "Unable to interpret without API credentials.";
+    if (!process.env.VITE_API_KEY) return "Unable to interpret without API credentials.";
     try {
         const ai = getAiClient();
         const combined = JSON.stringify({ userAnswers, partnerAnswers });
@@ -136,7 +136,7 @@ export const interpretQuizResults = async (quizTitle: string, userAnswers: any[]
 };
 
 export const getExerciseInterpretation = async (lessonTitle: string, scores: Record<string, number>, context: string): Promise<string> => {
-    if (!process.env.API_KEY) return "Interpretation unavailable.";
+    if (!process.env.VITE_API_KEY) return "Interpretation unavailable.";
     try {
         const ai = getAiClient();
         const scoreString = Object.entries(scores).map(([key, val]) => `${key}: ${val}/10`).join(', ');
@@ -160,7 +160,7 @@ export const getExerciseInterpretation = async (lessonTitle: string, scores: Rec
 };
 
 export const getDailyPrompt = async (): Promise<string> => {
-    if (!process.env.API_KEY) return "What's one thing you appreciate about your partner today?";
+    if (!process.env.VITE_API_KEY) return "What's one thing you appreciate about your partner today?";
     try {
         const ai = getAiClient();
         let promptRequest = "Generate one deep daily connection prompt for a couple.";
@@ -177,7 +177,7 @@ export const getDailyPrompt = async (): Promise<string> => {
 }
 
 export const generateActivities = async (vibe: string): Promise<Activity[]> => {
-    if (!process.env.API_KEY) return [];
+    if (!process.env.VITE_API_KEY) return [];
     try {
         const ai = getAiClient();
         let prompt = `Generate 4 unique relationship activities. Vibe: ${vibe}.`;
@@ -213,7 +213,7 @@ export const generateActivities = async (vibe: string): Promise<Activity[]> => {
 };
 
 export const generateLearningPath = async (): Promise<CourseModule[]> => {
-    if (!process.env.API_KEY) return [];
+    if (!process.env.VITE_API_KEY) return [];
     try {
         const ai = getAiClient();
         const prompt = `Create a 4-module relationship growth course for a couple focused on ${currentUserData?.focusAreas.join(', ') || 'growth'}. 
@@ -247,7 +247,7 @@ export const generateLearningPath = async (): Promise<CourseModule[]> => {
 };
 
 export const generateModuleContent = async (moduleTitle: string): Promise<Lesson[]> => {
-    if (!process.env.API_KEY) return [];
+    if (!process.env.VITE_API_KEY) return [];
     try {
         const ai = getAiClient();
         const prompt = `Create a 3-lesson curriculum for the module: "${moduleTitle}". Focus: ${currentUserData?.focusAreas.join(', ')}. 
