@@ -161,4 +161,5 @@ class CloudService {
   }
 }
 
-export default new CloudService();
+const cloudService = new CloudService();
+export { cloudService };
