@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { QuizQuestion, UserData } from '../types';
 import { generateQuizQuestions, interpretQuizResults } from '../services/geminiService';
@@ -13,7 +12,7 @@ const Quiz: React.FC = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [partnerAnswers, setPartnerAnswers] = useState<any>(null);
+  const [, setPartnerAnswers] = useState<any>(null);
   const [interpretation, setInterpretation] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
 
@@ -145,9 +144,10 @@ const Quiz: React.FC = () => {
     return (
       <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in">
         <button onClick={() => setCurrentStep('topic')} className="text-[#000000]/70 text-[10px] font-bold uppercase tracking-widest mb-12 heading-font">← Exit</button>
+
         <div className="mb-12">
-            <span className="text-[8px] font-bold uppercase tracking-widest text-[#000000]/40 block mb-2 heading-font">Question {currentQuestionIndex + 1} of {questions.length}</span>
-            <h2 className="text-4xl font-light text-[#000000] leading-tight">{q.question}</h2>
+          <span className="text-[8px] font-bold uppercase tracking-widest text-[#000000]/40 block mb-2 heading-font">Question {currentQuestionIndex + 1} of {questions.length}</span>
+          <h2 className="text-4xl font-light text-[#000000] leading-tight">{q.question}</h2>
         </div>
 
         <div className="space-y-4">
