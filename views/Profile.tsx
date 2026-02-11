@@ -23,6 +23,15 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
   const [dbUrl, setDbUrl] = useState(localStorage.getItem('kindred_supabase_url') || '');
   const [dbKey, setDbKey] = useState(localStorage.getItem('kindred_supabase_key') || '');
 
+  const vibes = [
+    { label: 'Neutral', emoji: '⚪' },
+    { label: 'Thinking of You', emoji: '💭' },
+    { label: 'Deep Work', emoji: '🕯' },
+    { label: 'Missing You', emoji: '🌊' },
+    { label: 'Reflecting', emoji: '✨' },
+    { label: 'Open to talk', emoji: '🌿' }
+  ];
+
   useEffect(() => {
     const saved = localStorage.getItem('kindred_user_data');
     if (saved) {
@@ -51,6 +60,15 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
       setTimeout(() => setCopySuccess(false), 2000);
       showMessage("Invite code copied to clipboard.");
     }
+  };
+
+  const setVibe = async (vibeLabel: string) => {
+    if (!userData) return;
+    await cloudService.updateVibe(userData.id, vibeLabel);
+    const updated = { ...userData, vibe: vibeLabel };
+    setUserData(updated);
+    localStorage.setItem('kindred_user_data', JSON.stringify(updated));
+    showMessage(`Vibe set to ${vibeLabel}`);
   };
 
   const linkPartner = async () => {
@@ -95,7 +113,7 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
       <div className="flex flex-col items-center mb-16">
         <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-[#FF007F]/5 to-[#00FF41]/5 flex items-center justify-center border border-[#000000]/5 shadow-sm mb-6 relative group">
             <span className="text-4xl font-light text-[#000000] tracking-tighter">{getInitials()}</span>
-            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-4 border-[#FDFCF0] ${isSupabaseConfigured ? 'bg-[#00FF41] animate-pulse' : 'bg-gray-300'}`} title={isSupabaseConfigured ? "Cloud Active" : "Local Only"} />
+            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-4 border-[#FDFCF0] ${isSupabaseConfigured ? 'bg-[#00FF41] animate-pulse' : 'bg-gray-400'}`} title={isSupabaseConfigured ? "Cloud Active" : "Local Only"} />
         </div>
         
         <h2 className="text-3xl font-light text-[#000000]">
@@ -125,6 +143,22 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
               </button>
             </div>
         </div>
+      </div>
+
+      <div className="mb-16">
+          <span className="text-[8px] font-bold uppercase tracking-widest text-[#000000]/40 mb-6 block heading-font text-center">Set Your Vibe</span>
+          <div className="grid grid-cols-3 gap-3">
+              {vibes.map(v => (
+                  <button 
+                    key={v.label}
+                    onClick={() => setVibe(v.label)}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-3xl border transition-all ${userData?.vibe === v.label ? 'border-[#00FF41] bg-[#00FF41]/5' : 'border-black/5 hover:border-black/10'}`}
+                  >
+                      <span className="text-xl">{v.emoji}</span>
+                      <span className="text-[7px] font-bold uppercase tracking-widest text-black/50 text-center">{v.label}</span>
+                  </button>
+              ))}
+          </div>
       </div>
 
       <div className="mb-24 space-y-8 p-10 bg-white/40 border border-[#000000]/5 rounded-[3rem]">

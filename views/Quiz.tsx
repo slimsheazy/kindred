@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { QuizQuestion, UserData } from '../types';
 import { generateQuizQuestions, interpretQuizResults, analyzeInteractionForScores } from '../services/geminiService';
 import { cloudService } from '../services/cloudService';
 import Markdown from 'markdown-to-jsx';
+
+type TopicStatus = 'new' | 'waiting' | 'ready' | 'completed';
 
 const Quiz: React.FC = () => {
   const [topic, setTopic] = useState('');
@@ -16,11 +18,36 @@ const Quiz: React.FC = () => {
   const [partnerAnswers, setPartnerAnswers] = useState<any>(null);
   const [interpretation, setInterpretation] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [topicStatuses, setTopicStatuses] = useState<Record<string, TopicStatus>>({});
+
+  const topics = ['Love Languages', 'Our Future', 'Memories', 'Daily Rhythms', 'Deep Desires'];
 
   useEffect(() => {
     const saved = localStorage.getItem('kindred_user_data');
-    if (saved) setUserData(JSON.parse(saved));
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        setUserData(parsed);
+        fetchTopicStatuses(parsed);
+    }
   }, []);
+
+  const fetchTopicStatuses = async (user: UserData) => {
+    const code = user.partnerCode || user.id || 'default';
+    const statuses: Record<string, TopicStatus> = {};
+    
+    for (const t of topics) {
+        const ans = await cloudService.getQuizAnswers(code, t);
+        const myAns = ans.find((a: any) => a.userId === user.id);
+        const partnerAns = ans.find((a: any) => a.userId !== user.id);
+        const synthesis = localStorage.getItem(`kindred_synthesis_${code}_${t}`);
+
+        if (synthesis) statuses[t] = 'completed';
+        else if (myAns && partnerAns) statuses[t] = 'ready';
+        else if (myAns) statuses[t] = 'waiting';
+        else statuses[t] = 'new';
+    }
+    setTopicStatuses(statuses);
+  };
 
   // Poll for partner answers while waiting
   useEffect(() => {
@@ -33,12 +60,22 @@ const Quiz: React.FC = () => {
     return () => clearInterval(interval);
   }, [currentStep, topic]);
 
-  const topics = ['Love Languages', 'Our Future', 'Memories', 'Daily Rhythms', 'Deep Desires'];
-
   const startQuiz = async (selectedTopic: string) => {
+    const status = topicStatuses[selectedTopic];
+    setTopic(selectedTopic);
+
+    if (status === 'completed' || status === 'ready') {
+        resumeQuiz(selectedTopic);
+        return;
+    }
+
+    if (status === 'waiting') {
+        setCurrentStep('waiting');
+        return;
+    }
+
     setIsLoading(true);
     setError(null);
-    setTopic(selectedTopic);
     try {
       const generated = await generateQuizQuestions(selectedTopic);
       if (generated && generated.length > 0) {
@@ -56,20 +93,46 @@ const Quiz: React.FC = () => {
     }
   };
 
+  const resumeQuiz = async (selectedTopic: string) => {
+    if (!userData) return;
+    const code = userData.partnerCode || userData.id;
+    const synthesis = localStorage.getItem(`kindred_synthesis_${code}_${selectedTopic}`);
+    
+    if (synthesis) {
+        setInterpretation(synthesis);
+        setCurrentStep('results');
+    } else {
+        // Must be ready
+        setIsLoading(true);
+        const ans = await cloudService.getQuizAnswers(code, selectedTopic);
+        const myAns = ans.find((a: any) => a.userId === userData.id)?.answers;
+        const partnerAns = ans.find((a: any) => a.userId !== userData.id)?.answers;
+        
+        if (myAns && partnerAns) {
+            setAnswers(myAns);
+            setPartnerAnswers(partnerAns);
+            generateInsights(selectedTopic, myAns, partnerAns);
+        } else {
+            setCurrentStep('topic');
+        }
+    }
+  };
+
   const handleAnswer = (questionId: string, answer: string) => {
     if (!answer.trim()) return;
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      submitQuiz();
+      submitQuiz({ ...answers, [questionId]: answer });
     }
   };
 
-  const submitQuiz = async () => {
+  const submitQuiz = async (finalAnswers: Record<string, string>) => {
     if (!userData) return;
     setCurrentStep('waiting');
-    await cloudService.saveQuizAnswer(userData.partnerCode || 'default', userData.id, topic, answers);
+    await cloudService.saveQuizAnswer(userData.partnerCode || 'default', userData.id, topic, finalAnswers);
+    if (userData) fetchTopicStatuses(userData);
     checkPartnerStatus();
   };
 
@@ -79,27 +142,41 @@ const Quiz: React.FC = () => {
     const partner = allAnswers.find((a: any) => a.userId !== userData.id);
     if (partner) {
       setPartnerAnswers(partner.answers);
-      generateInsights(partner.answers);
+      generateInsights(topic, answers, partner.answers);
     }
   };
 
-  const generateInsights = async (pAnswers: any) => {
-    if (interpretation || isLoading) return; 
+  const generateInsights = async (quizTopic: string, myAns: any, pAns: any) => {
+    if (interpretation || isLoading || !userData) return; 
     setIsLoading(true);
     try {
-      const res = await interpretQuizResults(topic, Object.values(answers), Object.values(pAnswers));
+      const res = await interpretQuizResults(quizTopic, Object.values(myAns), Object.values(pAns));
       setInterpretation(res);
       setCurrentStep('results');
       
+      const code = userData.partnerCode || userData.id;
+      localStorage.setItem(`kindred_synthesis_${code}_${quizTopic}`, res);
+      
       // Update Bond Map Equilibrium based on quiz synthesis
       const updates = await analyzeInteractionForScores(res);
-      if (updates.length > 0 && userData) {
-          await cloudService.batchUpdateScores(userData.partnerCode || 'default', updates);
+      if (updates.length > 0) {
+          await cloudService.batchUpdateScores(code, updates);
       }
+      fetchTopicStatuses(userData);
     } catch (err) {
       console.error("Interpretation failed", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const getStatusLabel = (t: string) => {
+    const status = topicStatuses[t];
+    switch (status) {
+        case 'waiting': return 'Awaiting Partner';
+        case 'ready': return 'Alchemy Ready';
+        case 'completed': return 'Synthesis Complete';
+        default: return 'Initiate';
     }
   };
 
@@ -133,9 +210,16 @@ const Quiz: React.FC = () => {
               onClick={() => startQuiz(t)}
               className="w-full text-left py-10 border-b border-[#000000]/10 hover:opacity-70 transition-all flex justify-between items-center group disabled:opacity-50"
             >
-              <span className="text-4xl font-light text-[#000000]">{t}</span>
-              <span className="text-xs font-bold text-[#000000]/20 heading-font">
-                {isLoading && topic === t ? 'Designing...' : 'Initiate'}
+              <div>
+                <span className="text-4xl font-light text-[#000000]">{t}</span>
+                {topicStatuses[t] === 'completed' && (
+                    <div className="mt-1 flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-[#00FF41] uppercase tracking-widest">Achieved Equilibrium</span>
+                    </div>
+                )}
+              </div>
+              <span className={`text-[9px] font-bold uppercase heading-font transition-all ${topicStatuses[t] === 'ready' ? 'text-[#00FF41] animate-pulse' : 'text-[#000000]/20'}`}>
+                {isLoading && topic === t ? 'Designing...' : getStatusLabel(t)}
               </span>
             </button>
           ))}
@@ -199,12 +283,17 @@ const Quiz: React.FC = () => {
   if (currentStep === 'waiting') {
     return (
       <div className="px-6 py-12 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
-        <h2 className="text-4xl font-light mb-6 text-[#000000]">Patience.</h2>
+        <h2 className="text-4xl font-light mb-6 text-[#000000]">Waiting.</h2>
         <p className="text-xl text-[#000000]/70 italic mb-12">Your reflections are archived. We're waiting for {userData?.partnerName || 'your partner'} to complete their cycle.</p>
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-12">
           <div className="w-16 h-16 border-2 border-black/5 border-t-black rounded-full animate-spin"></div>
-          <button onClick={checkPartnerStatus} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font">Force Sync</button>
+          
+          <div className="flex flex-col items-center gap-4">
+              <button onClick={() => setCurrentStep('topic')} className="w-64 py-5 bg-[#000000] text-white font-bold rounded-full uppercase text-[10px] tracking-widest shadow-xl">Return to Space</button>
+              <button onClick={checkPartnerStatus} className="text-[10px] font-bold uppercase tracking-widest text-[#000000]/40 hover:text-black border-b border-transparent hover:border-[#000000] pb-1 heading-font">Force Sync</button>
+          </div>
         </div>
+        <p className="mt-24 text-[9px] font-bold uppercase tracking-widest text-black/20 px-8">You can leave this screen. Kindred will notify you when the alchemy is ready.</p>
       </div>
     );
   }

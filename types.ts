@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum View {
@@ -21,6 +22,9 @@ export interface UserData {
   linkedPartnerId?: string;
   syncStatus: 'synced' | 'syncing' | 'offline';
   activeActivity?: Activity | null;
+  vibe?: string;
+  lastActive?: number;
+  lastPulseReceived?: number;
 }
 
 export interface BondScore {

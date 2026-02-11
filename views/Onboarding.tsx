@@ -1,12 +1,61 @@
 
-import React, { useState } from 'react';
-import { UserData } from '../types';
+import React, { useState, useMemo } from 'react';
+import { UserData, BondScore } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { cloudService } from '../services/cloudService';
 
 interface OnboardingProps {
   onComplete: (data: UserData) => void;
 }
+
+// Reusable BondMap preview for onboarding
+const CalibrationMap: React.FC<{ assessment: Record<string, number> }> = ({ assessment }) => {
+    const categories = ['Communication', 'Intimacy', 'Trust', 'Conflict', 'Shared Vision'];
+    const size = 200;
+    const center = size / 2;
+    const radius = size * 0.35;
+    
+    const points = categories.map((cat, i) => {
+        const val = assessment[cat] || 5;
+        const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+        const r = (val / 10) * radius;
+        return { 
+            x: center + r * Math.cos(angle), 
+            y: center + r * Math.sin(angle)
+        };
+    });
+
+    const polygonPath = points.map(p => `${p.x},${p.y}`).join(' ');
+
+    return (
+        <div className="flex flex-col items-center justify-center py-6 mb-8 animate-fade-in">
+            <svg width={size} height={size} className="overflow-visible drop-shadow-sm">
+                {/* Background Grid */}
+                {[0.2, 0.4, 0.6, 0.8, 1].map((scale, i) => (
+                    <circle key={i} cx={center} cy={center} r={radius * scale} fill="none" stroke="black" strokeWidth="0.5" strokeOpacity="0.05" />
+                ))}
+                {/* Axis lines */}
+                {categories.map((_, i) => {
+                    const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+                    return <line key={i} x1={center} y1={center} x2={center + radius * Math.cos(angle)} y2={center + radius * Math.sin(angle)} stroke="black" strokeWidth="0.5" strokeOpacity="0.1" />;
+                })}
+                {/* The Map */}
+                <polygon 
+                    points={polygonPath} 
+                    fill="#00FF41" 
+                    fillOpacity="0.1" 
+                    stroke="#00FF41" 
+                    strokeWidth="2" 
+                    className="transition-all duration-700 ease-out"
+                />
+                {points.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r="3" fill="#00FF41" className="transition-all duration-700 ease-out" />
+                ))}
+            </svg>
+            <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-black/30 mt-2 heading-font">Live Baseline</span>
+        </div>
+    );
+};
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState<'welcome' | 'auth' | 'profile' | 'assessment' | 'intentions'>('welcome');
@@ -69,16 +118,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     
     // Save initial baseline scores
     if (finalData.id) {
-        const scores = Object.entries(assessment).map(([category, score]) => ({
-            category,
-            score,
-            delta: 0
-        }));
         // We use user ID as a temporary partner code if they haven't linked yet
         const code = finalData.partnerCode || finalData.id;
-        for (const s of scores) {
-            // Fix: Explicitly cast score to number to ensure numeric types for arithmetic operation
-            await cloudService.updateBondScore(code, s.category, (s.score as number) - 3.5); // Adjust from baseline
+        // The Map starts at 3.5. We adjust it to the selected score.
+        for (const [cat, score] of Object.entries(assessment)) {
+            const currentScore = (score as number);
+            await cloudService.updateBondScore(code, cat, currentScore - 3.5);
         }
     }
     
@@ -131,9 +176,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
         {step === 'assessment' && (
            <div className="space-y-10">
-             <h2 className="text-5xl font-light">The Pulse.</h2>
-             <p className="text-sm italic text-black/40">Determine your starting equilibrium.</p>
-             <div className="space-y-10">
+             <div className="text-center">
+                <h2 className="text-5xl font-light mb-2">The Pulse.</h2>
+                <p className="text-sm italic text-black/40">Determine your starting equilibrium.</p>
+             </div>
+
+             <CalibrationMap assessment={assessment} />
+
+             <div className="space-y-10 max-h-[40vh] overflow-y-auto pr-2 no-scrollbar">
                {assessmentQuestions.map(({cat, q}) => (
                  <div key={cat} className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -141,7 +191,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         <span className="text-[10px] font-mono text-black/30">{assessment[cat]}/10</span>
                     </div>
                     <p className="text-xs italic text-black/80">{q}</p>
-                    <input type="range" min="1" max="10" step="1" value={assessment[cat]} onChange={(e) => setAssessment({...assessment, [cat]: parseInt(e.target.value)})} className="w-full h-1 bg-black/10 rounded-full appearance-none cursor-pointer" />
+                    <input 
+                        type="range" 
+                        min="1" 
+                        max="10" 
+                        step="1" 
+                        value={assessment[cat]} 
+                        onChange={(e) => setAssessment({...assessment, [cat]: parseInt(e.target.value)})} 
+                        className="w-full h-1 bg-black/10 rounded-full appearance-none cursor-pointer accent-black" 
+                    />
                  </div>
                ))}
              </div>

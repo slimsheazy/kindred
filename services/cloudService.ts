@@ -25,6 +25,8 @@ class CloudService {
         partner_name: userData.partnerName,
         partner_code: userData.partnerCode,
         focus_areas: userData.focusAreas,
+        vibe: userData.vibe || 'Neutral',
+        last_active: new Date().toISOString(),
         updated_at: new Date()
       });
       if (error) throw error;
@@ -32,6 +34,51 @@ class CloudService {
       console.error("Supabase signup failed", err);
     }
     return userData;
+  }
+
+  async updateVibe(userId: string, vibe: string): Promise<void> {
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('profiles').update({ vibe, updated_at: new Date() }).eq('id', userId);
+    }
+    const saved = localStorage.getItem('kindred_user_data');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      parsed.vibe = vibe;
+      localStorage.setItem('kindred_user_data', JSON.stringify(parsed));
+    }
+  }
+
+  async sendPulse(partnerCode: string): Promise<void> {
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('profiles').update({ 
+        last_pulse: new Date().toISOString() 
+      }).eq('partner_code', partnerCode);
+    }
+    localStorage.setItem(`kindred_last_pulse_${partnerCode}`, Date.now().toString());
+  }
+
+  async updateLastActive(userId: string): Promise<void> {
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('profiles').update({ last_active: new Date().toISOString() }).eq('id', userId);
+    }
+  }
+
+  async getPartnerPresence(partnerCode: string, myId: string): Promise<Partial<UserData> | null> {
+    if (this.useLocalStorageOnly) return null;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('vibe, last_active, last_pulse, user_name')
+      .eq('partner_code', partnerCode)
+      .neq('id', myId)
+      .single();
+    
+    if (error || !data) return null;
+    return {
+      vibe: data.vibe,
+      lastActive: new Date(data.last_active).getTime(),
+      lastPulseReceived: data.last_pulse ? new Date(data.last_pulse).getTime() : undefined,
+      userName: data.user_name
+    };
   }
 
   async linkPartner(myId: string, partnerCode: string): Promise<void> {
@@ -122,7 +169,7 @@ class CloudService {
         date: new Date(d.created_at).toLocaleDateString(),
         timestamp: new Date(d.created_at).getTime(),
         text: d.text,
-        theme_tags: d.theme_tags
+        themeTags: d.theme_tags
     }));
   }
 
@@ -185,20 +232,14 @@ class CloudService {
     }
   }
 
-  // --- Quiz Persistence ---
-
-  // Fix: Added missing saveQuizAnswer method
   async saveQuizAnswer(partnerCode: string, userId: string, topic: string, answers: Record<string, string>): Promise<void> {
     const key = `kindred_quiz_${partnerCode}_${topic}`;
     const existing = this.getLocal<any>(key);
     const filtered = existing.filter((a: any) => a.userId !== userId);
     const newRecord = { userId, answers, timestamp: Date.now() };
     this.saveLocal(key, [...filtered, newRecord]);
-    
-    // In a real Supabase scenario, we would upsert into a 'quiz_answers' table
   }
 
-  // Fix: Added missing getQuizAnswers method
   async getQuizAnswers(partnerCode: string, topic: string): Promise<any[]> {
     return this.getLocal<any>(`kindred_quiz_${partnerCode}_${topic}`);
   }
@@ -220,17 +261,47 @@ class CloudService {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: `partner_code=eq.${partnerCode}` }, onUpdate)
       .subscribe();
 
+    const presenceSub = supabase.channel('presence-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `partner_code=eq.${partnerCode}` }, onUpdate)
+      .subscribe();
+
     return () => {
       supabase.removeChannel(journalSub);
       supabase.removeChannel(scoreSub);
       supabase.removeChannel(goalsSub);
+      supabase.removeChannel(presenceSub);
     };
   }
 
   // --- Misc ---
 
   async submitPromptAnswer(partnerCode: string, userId: string, answer: string) {
-    localStorage.setItem(`kindred_prompt_ans_${partnerCode}_${userId}`, answer);
+    const key = `kindred_prompt_ans_${partnerCode}_${userId}`;
+    localStorage.setItem(key, answer);
+    
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('prompt_answers').upsert({
+        partner_code: partnerCode,
+        user_id: userId,
+        answer: answer,
+        updated_at: new Date()
+      }, { onConflict: 'partner_code,user_id' });
+    }
+  }
+
+  async getPartnerPromptAnswer(partnerCode: string, myId: string): Promise<string | null> {
+    if (this.useLocalStorageOnly) {
+      return localStorage.getItem(`kindred_prompt_ans_${partnerCode}_partner_sim`); // For testing
+    }
+    
+    const { data } = await supabase
+      .from('prompt_answers')
+      .select('answer')
+      .eq('partner_code', partnerCode)
+      .neq('user_id', myId)
+      .maybeSingle();
+      
+    return data?.answer || null;
   }
 
   async markLessonComplete(lessonId: string): Promise<void> {
