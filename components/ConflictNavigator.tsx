@@ -125,7 +125,7 @@ const ConflictNavigator: React.FC<ConflictNavigatorProps> = ({ userData, onClose
           scriptProcessor.connect(inputCtx.destination);
         },
         onmessage: async (message: LiveServerMessage) => {
-          if (message.toolCall) {
+          if (message.toolCall?.functionCalls) {
             for (const fc of message.toolCall.functionCalls) {
               if (fc.name === 'setMediationState') {
                 const { newPhase, speakerName, tensionLevel } = fc.args as any;
