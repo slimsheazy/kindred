@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export enum View {
@@ -9,6 +8,7 @@ export enum View {
   Profile = 'PROFILE',
   Mediation = 'MEDIATION',
   Quiz = 'QUIZ',
+  EsotericLens = 'ESOTERIC_LENS',
 }
 
 export interface UserData {
@@ -20,6 +20,7 @@ export interface UserData {
   partnerCode?: string;
   linkedPartnerId?: string;
   syncStatus: 'synced' | 'syncing' | 'offline';
+  activeActivity?: Activity | null;
 }
 
 export interface BondScore {
@@ -29,14 +30,15 @@ export interface BondScore {
 }
 
 export interface Lesson {
+  id: string;
   title: string;
   type: 'Reading' | 'Exercise' | 'Prompt';
   description: string;
   longContent: string;
-  isCompleted?: boolean;
 }
 
 export interface CourseModule {
+  id: string;
   title: string;
   description: string;
   duration: string;
@@ -47,16 +49,19 @@ export interface CourseModule {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  timestamp: number;
 }
 
 export interface Activity {
+  id: string;
   title: string;
   category: string;
   description: string;
   duration: string;
   difficulty: string;
-  icon?: React.ReactNode; 
   isGenerated?: boolean;
+  startTime?: number;
+  reflection?: string;
 }
 
 export interface JournalEntry {
@@ -68,6 +73,13 @@ export interface JournalEntry {
   timestamp: number;
   text: string;
   image?: string;
+  themeTags?: string[];
+}
+
+export interface MicroStep {
+  id: string;
+  text: string;
+  completed: boolean;
 }
 
 export interface Goal {
@@ -76,6 +88,8 @@ export interface Goal {
   type: 'Individual' | 'Couple';
   progress: number;
   lastUpdated: number;
+  microSteps?: MicroStep[];
+  encouragement?: string;
 }
 
 export interface QuizQuestion {

@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { QuizQuestion, UserData } from '../types';
-import { generateQuizQuestions, interpretQuizResults } from '../services/geminiService';
+import { generateQuizQuestions, interpretQuizResults, analyzeInteractionForScores } from '../services/geminiService';
 import { cloudService } from '../services/cloudService';
-import Markdown from 'react-markdown';
+import Markdown from 'markdown-to-jsx';
 
 const Quiz: React.FC = () => {
   const [topic, setTopic] = useState('');
@@ -12,12 +13,12 @@ const Quiz: React.FC = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [, setPartnerAnswers] = useState<any>(null);
+  const [partnerAnswers, setPartnerAnswers] = useState<any>(null);
   const [interpretation, setInterpretation] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('bonds_user_data');
+    const saved = localStorage.getItem('kindred_user_data');
     if (saved) setUserData(JSON.parse(saved));
   }, []);
 
@@ -46,10 +47,10 @@ const Quiz: React.FC = () => {
         setAnswers({});
         setCurrentStep('quiz');
       } else {
-        setError("The Oracle couldn't generate questions right now. Please check your connection or API key.");
+        setError("The Oracle is momentarily quiet. Please check your API key and try initiating again.");
       }
     } catch (err) {
-      setError("Something went wrong while preparing your quiz. Please try again.");
+      setError("An unexpected error occurred while architecting your quiz.");
     } finally {
       setIsLoading(false);
     }
@@ -83,12 +84,18 @@ const Quiz: React.FC = () => {
   };
 
   const generateInsights = async (pAnswers: any) => {
-    if (interpretation || isLoading) return; // Prevent double trigger
+    if (interpretation || isLoading) return; 
     setIsLoading(true);
     try {
       const res = await interpretQuizResults(topic, Object.values(answers), Object.values(pAnswers));
       setInterpretation(res);
       setCurrentStep('results');
+      
+      // Update Bond Map Equilibrium based on quiz synthesis
+      const updates = await analyzeInteractionForScores(res);
+      if (updates.length > 0 && userData) {
+          await cloudService.batchUpdateScores(userData.partnerCode || 'default', updates);
+      }
     } catch (err) {
       console.error("Interpretation failed", err);
     } finally {
@@ -107,8 +114,8 @@ const Quiz: React.FC = () => {
         <p className="text-xl text-[#000000]/70 mb-12 italic font-light">Select a theme for your journey into each other's worlds.</p>
 
         {error && (
-          <div className="mb-12 p-6 bg-red-50 border border-red-100 rounded-3xl text-red-600">
-            <p className="text-sm italic mb-4">{error}</p>
+          <div className="mb-12 p-8 bg-red-50 border border-red-100 rounded-[2rem] text-red-600">
+            <p className="text-sm italic mb-6 leading-relaxed">{error}</p>
             <button 
               onClick={() => startQuiz(topic)}
               className="text-[10px] font-bold uppercase tracking-widest border-b border-red-600 pb-1"
@@ -144,10 +151,9 @@ const Quiz: React.FC = () => {
     return (
       <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in">
         <button onClick={() => setCurrentStep('topic')} className="text-[#000000]/70 text-[10px] font-bold uppercase tracking-widest mb-12 heading-font">← Exit</button>
-
         <div className="mb-12">
-          <span className="text-[8px] font-bold uppercase tracking-widest text-[#000000]/40 block mb-2 heading-font">Question {currentQuestionIndex + 1} of {questions.length}</span>
-          <h2 className="text-4xl font-light text-[#000000] leading-tight">{q.question}</h2>
+            <span className="text-[8px] font-bold uppercase tracking-widest text-[#000000]/40 block mb-2 heading-font">Step {currentQuestionIndex + 1} of {questions.length}</span>
+            <h2 className="text-4xl font-light text-[#000000] leading-tight">{q.question}</h2>
         </div>
 
         <div className="space-y-4">
@@ -194,9 +200,9 @@ const Quiz: React.FC = () => {
     return (
       <div className="px-6 py-12 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
         <h2 className="text-4xl font-light mb-6 text-[#000000]">Patience.</h2>
-        <p className="text-xl text-[#000000]/70 italic mb-12">Your reflections are saved. We're waiting for {userData?.partnerName || 'your partner'} to complete their part.</p>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-2 border-black/10 border-t-black rounded-full animate-spin"></div>
+        <p className="text-xl text-[#000000]/70 italic mb-12">Your reflections are archived. We're waiting for {userData?.partnerName || 'your partner'} to complete their cycle.</p>
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-16 h-16 border-2 border-black/5 border-t-black rounded-full animate-spin"></div>
           <button onClick={checkPartnerStatus} className="text-[10px] font-bold uppercase tracking-widest text-[#000000] border-b border-[#000000] pb-1 heading-font">Force Sync</button>
         </div>
       </div>
@@ -207,15 +213,15 @@ const Quiz: React.FC = () => {
     return (
       <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in">
         <header className="mb-16">
-          <h1 className="text-6xl font-light mb-2 text-[#000000]">Insights.</h1>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#000000]/70 heading-font">The alchemy of your answers</p>
+          <h1 className="text-6xl font-light mb-2 text-[#000000]">Synthesis.</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#000000]/70 heading-font">The Alchemy of Connection</p>
         </header>
 
         <div className="lesson-content mb-16 prose prose-xl prose-stone">
           <Markdown>{interpretation}</Markdown>
         </div>
 
-        <button onClick={() => setCurrentStep('topic')} className="w-full py-5 bg-[#000000] text-white font-bold rounded-full uppercase text-xs tracking-widest">Return to Home</button>
+        <button onClick={() => setCurrentStep('topic')} className="w-full py-5 bg-[#000000] text-white font-bold rounded-full uppercase text-xs tracking-widest">Return Home</button>
       </div>
     );
   }

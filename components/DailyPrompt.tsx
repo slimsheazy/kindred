@@ -14,15 +14,10 @@ const DailyPrompt: React.FC = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('bonds_user_data');
+    const savedUser = localStorage.getItem('kindred_user_data');
     if (savedUser) {
         const parsed = JSON.parse(savedUser);
         setUserData(parsed);
-        const subscription = cloudService.subscribeToPartner(parsed.partnerCode || 'default', parsed.id, (answer) => {
-            setPartnerAnswer(answer);
-            setPartnerAnswerSubmitted(true);
-        });
-        return () => { if (subscription && typeof subscription.unsubscribe === 'function') subscription.unsubscribe(); };
     }
   }, []);
 
@@ -44,15 +39,10 @@ const DailyPrompt: React.FC = () => {
     }
   };
   
-  const showBothAnswers = myAnswerSubmitted && partnerAnswerSubmitted;
-
   return (
     <div className="py-12 animate-fade-in">
       <div className="flex items-center text-[#262626]/70 mb-10 justify-between px-2">
         <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] heading-font">Daily Reflection</h2>
-        {myAnswerSubmitted && !partnerAnswerSubmitted && (
-            <span className="text-[9px] font-bold tracking-widest text-[#262626]/50 animate-pulse">Waiting for partner...</span>
-        )}
       </div>
 
       {isLoading ? (
@@ -64,23 +54,9 @@ const DailyPrompt: React.FC = () => {
         <p className="text-[#262626] font-medium text-3xl leading-snug mb-12 italic text-center px-4">"{prompt}"</p>
       )}
 
-      {showBothAnswers ? (
-        <div className="space-y-12 px-2">
-          <div>
-            <p className="text-[#262626]/70 text-[9px] uppercase tracking-[0.2em] mb-4 heading-font">You</p>
-            <p className="text-xl leading-relaxed text-[#262626] border-l-2 border-[#262626]/20 pl-6">{myAnswer}</p>
-          </div>
-          <div className="animate-fade-in" style={{animationDelay: '0.3s'}}>
-            <p className="text-[#262626]/70 text-[9px] uppercase tracking-[0.2em] mb-4 heading-font">{userData?.partnerName || 'Partner'}</p>
-            <p className="text-xl leading-relaxed text-[#262626] border-l-2 border-[#00FF41]/60 pl-6">{partnerAnswer}</p>
-          </div>
-          <button onClick={() => window.location.reload()} className="w-full mt-10 border border-[#262626] text-[#262626] font-bold py-5 rounded-full hover:bg-[#262626] hover:text-white transition-all text-xs tracking-[0.2em] uppercase heading-font">
-            Renew Spirit
-          </button>
-        </div>
-      ) : myAnswerSubmitted ? (
+      {myAnswerSubmitted ? (
         <div className="text-center py-20 px-2">
-          <p className="text-[#262626]/60 text-sm italic tracking-wide">Shared with {userData?.partnerName || 'Partner'}. Waiting for the link to complete.</p>
+          <p className="text-[#262626]/60 text-sm italic tracking-wide">Shared with {userData?.partnerName || 'Partner'}.</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="px-2">

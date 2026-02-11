@@ -1,6 +1,6 @@
 {
-  "name": "Bonds Connect: An AI-Powered Couples Connection App",
-  "description": "A comprehensive collaborative app designed to help couples deepen their connection through personalized daily prompts, interactive activities, shared journaling, and intelligent goal tracking—all powered by adaptive AI that learns from your unique relationship patterns.",
+  "name": "Kindred: AI-Powered Couples Connection",
+  "description": "A collaborative space for couples to deepen their connection through shared reflections, actions, and meditation—powered by Kindred AI.",
   "requestFramePermissions": [
     "microphone"
   ]
