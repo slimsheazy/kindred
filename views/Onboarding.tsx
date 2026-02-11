@@ -2,13 +2,14 @@
 import React, { useState } from 'react';
 import { UserData } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { cloudService } from '../services/cloudService';
 
 interface OnboardingProps {
   onComplete: (data: UserData) => void;
 }
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-  const [step, setStep] = useState<'welcome' | 'auth' | 'profile' | 'intentions'>('welcome');
+  const [step, setStep] = useState<'welcome' | 'auth' | 'profile' | 'assessment' | 'intentions'>('welcome');
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,10 +26,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     syncStatus: 'offline'
   });
 
+  const [assessment, setAssessment] = useState<Record<string, number>>({
+    'Communication': 5,
+    'Intimacy': 5,
+    'Trust': 5,
+    'Conflict': 5,
+    'Shared Vision': 5
+  });
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      setError("Cloud not configured. Please add Supabase keys in Profile later.");
+      setError("Cloud not configured. Proceeding in local-only mode.");
       setStep('profile');
       return;
     }
@@ -38,9 +47,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     try {
       if (isLogin) {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
         if (authError) throw authError;
-        // If login successful, App.tsx will handle session redirection
       } else {
         const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
         if (authError) throw authError;
@@ -56,16 +64,34 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     }
   };
 
-  const saveProfile = async () => {
-    setStep('intentions');
-  };
-
   const handleComplete = async () => {
     const finalData = { ...data, syncStatus: 'synced' as const };
+    
+    // Save initial baseline scores
+    if (finalData.id) {
+        const scores = Object.entries(assessment).map(([category, score]) => ({
+            category,
+            score,
+            delta: 0
+        }));
+        // We use user ID as a temporary partner code if they haven't linked yet
+        const code = finalData.partnerCode || finalData.id;
+        for (const s of scores) {
+            // Fix: Explicitly cast score to number to ensure numeric types for arithmetic operation
+            await cloudService.updateBondScore(code, s.category, (s.score as number) - 3.5); // Adjust from baseline
+        }
+    }
+    
     onComplete(finalData);
   };
 
-  const focusOptions = ["Intimacy", "Communication", "Conflict", "Adventure", "Trust", "Growth"];
+  const assessmentQuestions = [
+    { cat: 'Communication', q: 'How easily do "hard conversations" happen?' },
+    { cat: 'Intimacy', q: 'How connected do you feel emotionally right now?' },
+    { cat: 'Trust', q: 'How secure is the foundation beneath you?' },
+    { cat: 'Conflict', q: 'How healthy is the way you navigate friction?' },
+    { cat: 'Shared Vision', q: 'How clear is the path you are building together?' }
+  ];
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 text-[#000000] relative bg-[#FDFCF0]">
@@ -75,61 +101,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           <div className="text-center">
             <h1 className="text-7xl font-light tracking-tight leading-tight mb-8">Kindred.</h1>
             <p className="text-xl text-[#000000]/70 font-light mb-12 leading-relaxed italic">Architecting shared depth through intentional space and AI insight.</p>
-            <button 
-              onClick={() => setStep('auth')} 
-              className="w-full border border-[#000000] py-5 rounded-full font-bold text-xs uppercase tracking-[0.3em] hover:bg-[#000000] hover:text-white transition-all heading-font"
-            >
-              Initiate
-            </button>
+            <button onClick={() => setStep('auth')} className="w-full border border-[#000000] py-5 rounded-full font-bold text-xs uppercase tracking-[0.3em] hover:bg-[#000000] hover:text-white transition-all heading-font">Initiate</button>
           </div>
         )}
 
         {step === 'auth' && (
           <div className="space-y-10">
-             <div className="text-center mb-8">
-                <h2 className="text-5xl font-light mb-2">{isLogin ? 'Welcome back.' : 'Create Space.'}</h2>
-                <p className="text-sm text-black/40 italic">Secure your shared anthology.</p>
-             </div>
-             
+             <h2 className="text-5xl font-light text-center">{isLogin ? 'Welcome back.' : 'Create Space.'}</h2>
              <form onSubmit={handleAuth} className="space-y-6">
-                {error && <p className="text-red-500 text-xs font-bold uppercase tracking-widest text-center">{error}</p>}
-                
-                <div className="border-b border-black/10 py-2">
-                  <input 
-                    type="email" 
-                    placeholder="Email Address" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-transparent text-xl font-light outline-none"
-                    required
-                  />
-                </div>
-                <div className="border-b border-black/10 py-2">
-                  <input 
-                    type="password" 
-                    placeholder="Password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-transparent text-xl font-light outline-none"
-                    required
-                  />
-                </div>
-
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="w-full bg-black text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em] shadow-xl hover:opacity-90 transition-all heading-font"
-                >
-                  {loading ? 'Processing...' : (isLogin ? 'Enter Space' : 'Register Account')}
-                </button>
+                {error && <p className="text-red-500 text-[10px] font-bold uppercase text-center">{error}</p>}
+                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-transparent border-b border-black/10 py-4 outline-none text-xl" required />
+                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-transparent border-b border-black/10 py-4 outline-none text-xl" required />
+                <button type="submit" disabled={loading} className="w-full bg-black text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em]">{loading ? '...' : (isLogin ? 'Enter' : 'Join')}</button>
              </form>
-
-             <button 
-               onClick={() => setIsLogin(!isLogin)} 
-               className="w-full text-[10px] font-bold uppercase tracking-widest text-black/40 hover:text-black transition-colors"
-             >
-               {isLogin ? "Need an account? Sign Up" : "Already registered? Sign In"}
-             </button>
+             <button onClick={() => setIsLogin(!isLogin)} className="w-full text-[10px] font-bold uppercase tracking-widest text-black/40">{isLogin ? "Need an account?" : "Already registered?"}</button>
           </div>
         )}
 
@@ -137,34 +122,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
            <div className="space-y-12">
              <h2 className="text-5xl font-light">The basics.</h2>
              <div className="space-y-8">
-               <div className="border-b border-[#000000]/30 py-4">
-                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#000000]/50 mb-1 block">Your Name</label>
-                 <input 
-                    type="text" 
-                    value={data.userName} 
-                    onChange={(e) => setData({...data, userName: e.target.value})} 
-                    className="w-full bg-transparent text-3xl font-light outline-none focus:border-[#000000] transition-all placeholder-[#000000]/20" 
-                    placeholder="..." 
-                 />
-               </div>
-               <div className="border-b border-[#000000]/30 py-4">
-                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#000000]/50 mb-1 block">Partner's Name</label>
-                 <input 
-                    type="text" 
-                    value={data.partnerName} 
-                    onChange={(e) => setData({...data, partnerName: e.target.value})} 
-                    className="w-full bg-transparent text-3xl font-light outline-none focus:border-[#000000] transition-all placeholder-[#000000]/20" 
-                    placeholder="..." 
-                 />
-               </div>
+               <input type="text" value={data.userName} onChange={(e) => setData({...data, userName: e.target.value})} className="w-full bg-transparent border-b border-black/10 text-3xl font-light py-4" placeholder="Your Name" />
+               <input type="text" value={data.partnerName} onChange={(e) => setData({...data, partnerName: e.target.value})} className="w-full bg-transparent border-b border-black/10 text-3xl font-light py-4" placeholder="Partner Name" />
              </div>
-             <button 
-                onClick={saveProfile} 
-                disabled={!data.userName || !data.partnerName} 
-                className="w-full bg-[#000000] text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em] disabled:opacity-30 transition-all heading-font"
-             >
-                Next
-             </button>
+             <button onClick={() => setStep('assessment')} disabled={!data.userName || !data.partnerName} className="w-full bg-[#000000] text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em]">Next</button>
+           </div>
+        )}
+
+        {step === 'assessment' && (
+           <div className="space-y-10">
+             <h2 className="text-5xl font-light">The Pulse.</h2>
+             <p className="text-sm italic text-black/40">Determine your starting equilibrium.</p>
+             <div className="space-y-10">
+               {assessmentQuestions.map(({cat, q}) => (
+                 <div key={cat} className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-black/60">{cat}</label>
+                        <span className="text-[10px] font-mono text-black/30">{assessment[cat]}/10</span>
+                    </div>
+                    <p className="text-xs italic text-black/80">{q}</p>
+                    <input type="range" min="1" max="10" step="1" value={assessment[cat]} onChange={(e) => setAssessment({...assessment, [cat]: parseInt(e.target.value)})} className="w-full h-1 bg-black/10 rounded-full appearance-none cursor-pointer" />
+                 </div>
+               ))}
+             </div>
+             <button onClick={() => setStep('intentions')} className="w-full bg-[#000000] text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em]">Set Baseline</button>
            </div>
         )}
 
@@ -172,23 +153,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
            <div className="space-y-12">
              <h2 className="text-5xl font-light">Intentions.</h2>
              <div className="grid grid-cols-2 gap-4">
-               {focusOptions.map(opt => (
-                 <button 
-                    key={opt} 
-                    onClick={() => setData({...data, focusAreas: data.focusAreas.includes(opt) ? data.focusAreas.filter(f => f !== opt) : [...data.focusAreas, opt]})} 
-                    className={`py-6 border rounded-3xl text-sm font-bold uppercase tracking-widest heading-font transition-all ${data.focusAreas.includes(opt) ? 'bg-[#000000] text-white border-[#000000]' : 'border-[#000000]/20 text-[#000000]/50 hover:border-[#000000]'}`}
-                 >
-                    {opt}
-                 </button>
+               {["Intimacy", "Communication", "Conflict", "Adventure", "Trust", "Growth"].map(opt => (
+                 <button key={opt} onClick={() => setData({...data, focusAreas: data.focusAreas.includes(opt) ? data.focusAreas.filter(f => f !== opt) : [...data.focusAreas, opt]})} className={`py-6 border rounded-3xl text-xs font-bold uppercase tracking-widest transition-all ${data.focusAreas.includes(opt) ? 'bg-black text-white' : 'text-black/40 border-black/10'}`}>{opt}</button>
                ))}
              </div>
-             <button 
-                onClick={handleComplete} 
-                disabled={data.focusAreas.length === 0} 
-                className="w-full bg-[#000000] text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em] disabled:opacity-30 transition-all heading-font"
-             >
-                Complete
-             </button>
+             <button onClick={handleComplete} disabled={data.focusAreas.length === 0} className="w-full bg-[#000000] text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em]">Complete</button>
            </div>
         )}
       </div>
