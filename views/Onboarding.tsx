@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { UserData, BondScore } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { cloudService } from '../services/cloudService';
@@ -74,6 +74,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     partnerCode: '',
     syncStatus: 'offline'
   });
+
+    // Handle OAuth callback
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && session.user) {
+        setData(prev => ({ ...prev, id: session.user.id }));
+        setStep('profile');
+      }
+    };
+    checkAuth();
+  }, []);
 
   const [assessment, setAssessment] = useState<Record<string, number>>({
     'Communication': 5,
