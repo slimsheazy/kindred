@@ -6,8 +6,8 @@ const getSupabaseConfig = () => {
   const localUrl = localStorage.getItem('kindred_supabase_url');
   const localKey = localStorage.getItem('kindred_supabase_key');
   
-  const url = localUrl || process.env.SUPABASE_URL || 'https://placeholder-project.supabase.co';
-  const key = localKey || process.env.SUPABASE_ANON_KEY || 'placeholder-key';
+  const url = localUrl || import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-project.supabase.co';
+  const key = localKey || import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
   
   return { url, key };
 };
