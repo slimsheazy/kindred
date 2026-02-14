@@ -63,6 +63,34 @@ class CloudService {
     }
   }
 
+  // --- Session Handshakes ---
+
+  async updateReflectionTimestamp(userId: string): Promise<void> {
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('profiles').update({ 
+        last_reflection_at: new Date().toISOString() 
+      }).eq('id', userId);
+    }
+  }
+
+  async getPartnerReflectionStatus(partnerCode: string, myId: string): Promise<{ hasReflected: boolean, timestamp?: number } | null> {
+    if (this.useLocalStorageOnly) return null;
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('last_reflection_at')
+      .eq('partner_code', partnerCode)
+      .neq('id', myId)
+      .single();
+    
+    if (error || !data) return null;
+    
+    const hasReflected = data.last_reflection_at !== null;
+    const timestamp = data.last_reflection_at ? new Date(data.last_reflection_at).getTime() : undefined;
+    
+    return { hasReflected, timestamp };
+  }
+
   async getPartnerPresence(partnerCode: string, myId: string): Promise<Partial<UserData> | null> {
     if (this.useLocalStorageOnly) return null;
     const { data, error } = await supabase
