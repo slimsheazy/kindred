@@ -408,6 +408,96 @@ class CloudService {
     const saved = localStorage.getItem('kindred_active_activity');
     return saved ? JSON.parse(saved) : null;
   }
+
+  // --- Learning Path Persistence ---
+
+  async saveLearningPath(partnerCode: string, pathData: any): Promise<void> {
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('learning_paths').upsert({
+        partner_code: partnerCode,
+        path_data: pathData,
+        updated_at: new Date()
+      }, { onConflict: 'partner_code' });
+    }
+    // Also cache in localStorage
+    localStorage.setItem(`kindred_learning_path_${partnerCode}`, JSON.stringify(pathData));
+  }
+
+  async getLearningPath(partnerCode: string): Promise<any | null> {
+    // Try Supabase first
+    if (!this.useLocalStorageOnly) {
+      const { data, error } = await supabase
+        .from('learning_paths')
+        .select('path_data')
+        .eq('partner_code', partnerCode)
+        .maybeSingle();
+      
+      if (data?.path_data) {
+        // Cache in localStorage
+        localStorage.setItem(`kindred_learning_path_${partnerCode}`, JSON.stringify(data.path_data));
+        return data.path_data;
+      }
+    }
+    
+    // Fallback to localStorage
+    const cached = localStorage.getItem(`kindred_learning_path_${partnerCode}`);
+    return cached ? JSON.parse(cached) : null;
+  }
+
+  // --- Lesson Completions ---
+
+  async markLessonCompleteShared(partnerCode: string, userId: string, lessonId: string, phaseNumber: number): Promise<void> {
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('lesson_completions').upsert({
+        partner_code: partnerCode,
+        user_id: userId,
+        lesson_id: lessonId,
+        phase_number: phaseNumber,
+        completed_at: new Date()
+      }, { onConflict: 'partner_code,user_id,lesson_id' });
+    }
+  }
+
+  async getCompletedLessonsForCouple(partnerCode: string): Promise<any[]> {
+    if (this.useLocalStorageOnly) return [];
+    
+    const { data, error } = await supabase
+      .from('lesson_completions')
+      .select('*')
+      .eq('partner_code', partnerCode);
+    
+    return data || [];
+  }
+
+  async isPhaseUnlocked(partnerCode: string, phaseNumber: number, totalLessonsInPreviousPhase: number): Promise<boolean> {
+    if (phaseNumber === 1) return true; // Phase 1 always unlocked
+    
+    if (this.useLocalStorageOnly) return true; // In offline mode, all phases unlocked
+    
+    // Count unique lesson completions for previous phase by BOTH partners
+    const { data, error } = await supabase
+      .from('lesson_completions')
+      .select('lesson_id, user_id')
+      .eq('partner_code', partnerCode)
+      .eq('phase_number', phaseNumber - 1);
+    
+    if (!data) return false;
+    
+    // Group completions by lesson_id to see which lessons both partners completed
+    const lessonCompletions = new Map<string, Set<string>>();
+    data.forEach((completion: any) => {
+      if (!lessonCompletions.has(completion.lesson_id)) {
+        lessonCompletions.set(completion.lesson_id, new Set());
+      }
+      lessonCompletions.get(completion.lesson_id)!.add(completion.user_id);
+    });
+    
+    // Count lessons where BOTH partners completed
+    const lessonsCompletedByBoth = Array.from(lessonCompletions.values())
+      .filter(userSet => userSet.size >= 2).length;
+    
+    return lessonsCompletedByBoth >= totalLessonsInPreviousPhase;
+  }
 }
 
 export const cloudService = new CloudService();
