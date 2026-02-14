@@ -39,7 +39,7 @@ const Quiz: React.FC = () => {
         const ans = await cloudService.getQuizAnswers(code, t);
         const myAns = ans.find((a: any) => a.userId === user.id);
         const partnerAns = ans.find((a: any) => a.userId !== user.id);
-        const synthesis = localStorage.getItem(`kindred_synthesis_${code}_${t}`);
+              const synthesis = await cloudService.getQuizSynthesis(code, t);
 
         if (synthesis) statuses[t] = 'completed';
         else if (myAns && partnerAns) statuses[t] = 'ready';
@@ -49,16 +49,6 @@ const Quiz: React.FC = () => {
     setTopicStatuses(statuses);
   };
 
-  // Poll for partner answers while waiting
-  useEffect(() => {
-    let interval: any;
-    if (currentStep === 'waiting') {
-      interval = setInterval(() => {
-        checkPartnerStatus();
-      }, 5000);
-    }
-    return () => clearInterval(interval);
-  }, [currentStep, topic]);
 
   const startQuiz = async (selectedTopic: string) => {
     const status = topicStatuses[selectedTopic];
@@ -96,7 +86,7 @@ const Quiz: React.FC = () => {
   const resumeQuiz = async (selectedTopic: string) => {
     if (!userData) return;
     const code = userData.partnerCode || userData.id;
-    const synthesis = localStorage.getItem(`kindred_synthesis_${code}_${selectedTopic}`);
+        const synthesis = await cloudService.getQuizSynthesis(code, selectedTopic);
     
     if (synthesis) {
         setInterpretation(synthesis);
@@ -133,8 +123,20 @@ const Quiz: React.FC = () => {
     setCurrentStep('waiting');
     await cloudService.saveQuizAnswer(userData.partnerCode || 'default', userData.id, topic, finalAnswers);
     if (userData) fetchTopicStatuses(userData);
-    checkPartnerStatus();
-  };
+
+    // Check if partner has answered - if yes, trigger synthesis immediately
+    const allAnswers = await cloudService.getQuizAnswers(userData.partnerCode || 'default', topic);
+    const partner = allAnswers.find((a: any) => a.userId !== userData.id);
+    
+    if (partner) {
+      // Partner has answered! Generate synthesis immediately
+      setPartnerAnswers(partner.answers);
+      generateInsights(topic, finalAnswers, partner.answers);
+    } else {
+      // Partner hasn't answered yet, they can return to Dashboard
+      setCurrentStep('topic');
+    }
+      };
 
   const checkPartnerStatus = async () => {
     if (!userData || !topic) return;
@@ -155,7 +157,7 @@ const Quiz: React.FC = () => {
       setCurrentStep('results');
       
       const code = userData.partnerCode || userData.id;
-      localStorage.setItem(`kindred_synthesis_${code}_${quizTopic}`, res);
+            await cloudService.saveQuizSynthesis(code, quizTopic, res);
       
       // Update Bond Map Equilibrium based on quiz synthesis
       const updates = await analyzeInteractionForScores(res);
