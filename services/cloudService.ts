@@ -272,6 +272,44 @@ class CloudService {
     return this.getLocal<any>(`kindred_quiz_${partnerCode}_${topic}`);
   }
 
+  // --- Quiz Syntheses ---
+
+  async saveQuizSynthesis(partnerCode: string, topic: string, synthesis: string): Promise<void> {
+    // Save to localStorage for offline/local-first
+    localStorage.setItem(`kindred_synthesis_${partnerCode}_${topic}`, synthesis);
+    
+    // Save to Supabase for sync
+    if (!this.useLocalStorageOnly) {
+      await supabase.from('quiz_syntheses').upsert({
+        partner_code: partnerCode,
+        topic,
+        synthesis,
+        updated_at: new Date()
+      }, { onConflict: 'partner_code,topic' });
+    }
+  }
+
+  async getQuizSynthesis(partnerCode: string, topic: string): Promise<string | null> {
+    // Try Supabase first
+    if (!this.useLocalStorageOnly) {
+      const { data, error } = await supabase
+        .from('quiz_syntheses')
+        .select('synthesis')
+        .eq('partner_code', partnerCode)
+        .eq('topic', topic)
+        .maybeSingle();
+      
+      if (data?.synthesis) {
+        // Cache in localStorage
+        localStorage.setItem(`kindred_synthesis_${partnerCode}_${topic}`, data.synthesis);
+        return data.synthesis;
+      }
+    }
+    
+    // Fallback to localStorage
+    return localStorage.getItem(`kindred_synthesis_${partnerCode}_${topic}`);
+  }
+
   // --- Realtime Subscriptions ---
 
   subscribeToPartnerSpace(partnerCode: string, onUpdate: () => void) {
