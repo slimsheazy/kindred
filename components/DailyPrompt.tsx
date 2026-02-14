@@ -36,6 +36,7 @@ const DailyPrompt: React.FC = () => {
     if (myAnswer.trim() && userData) {
       setMyAnswerSubmitted(true);
       await cloudService.submitPromptAnswer(userData.partnerCode || 'default', userData.id, myAnswer);
+      await cloudService.updateReflectionTimestamp(userData.id);
     }
   };
   
