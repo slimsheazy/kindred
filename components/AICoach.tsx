@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getCoachingResponse, analyzeInteractionForScores } from '../services/geminiService';
 import { cloudService } from '../services/cloudService';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, JournalEntry, BondScore, GrowthLog, FoundationSummary } from '../types';
 import Markdown from 'react-markdown';
 
 const AICoach: React.FC = () => {
@@ -44,23 +44,46 @@ const AICoach: React.FC = () => {
     
     const userMsg: ChatMessage = { role: 'user', text: userInput, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
-    await cloudService.saveChatMessage(userData.partnerCode || 'default', userMsg);
+    const partnerCode = userData.partnerCode || userData.id || 'default';
+    await cloudService.saveChatMessage(partnerCode, userMsg);
 
     const currentInput = userInput;
     setUserInput('');
     setIsLoading(true);
 
     try {
-      const res = await getCoachingResponse(currentInput, messages);
+      const [scores, entries, foundation] = await Promise.all([
+        cloudService.getBondScores(partnerCode),
+        cloudService.getJournalEntries(partnerCode),
+        cloudService.getLatestFoundationSummary(partnerCode)
+      ]);
+      const lastThreeEntries = entries.slice(0, 3);
+
+      const res = await getCoachingResponse(currentInput, messages, { 
+        bondScores: scores, 
+        journalEntries: lastThreeEntries,
+        foundationSummary: foundation?.content
+      });
       const modelMsg: ChatMessage = { role: 'model', text: res, timestamp: Date.now() };
       setMessages(prev => [...prev, modelMsg]);
       await cloudService.saveChatMessage(userData.partnerCode || 'default', modelMsg);
       
-      // Analyze conversation for score updates
       const recentContext = messages.slice(-2).map(m => m.text).join(' ') + ' ' + currentInput + ' ' + res;
       const updates = await analyzeInteractionForScores(recentContext);
       if (updates.length > 0) {
-          await cloudService.batchUpdateScores(userData.partnerCode || 'default', updates);
+          await cloudService.batchUpdateScores(partnerCode, updates);
+          
+          // Create Growth Logs for attribution
+          for (const update of updates) {
+              const log: GrowthLog = {
+                  id: `growth-${Date.now()}-${Math.random()}`,
+                  timestamp: Date.now(),
+                  category: update.category,
+                  delta: update.delta,
+                  context: `following your dialogue about ${currentInput.slice(0, 30)}...`
+              };
+              await cloudService.saveGrowthLog(partnerCode, log);
+          }
       }
     } catch (err) {
       const errorMsg: ChatMessage = { 
@@ -82,17 +105,17 @@ const AICoach: React.FC = () => {
   };
 
   return (
-    <div className="py-20 border-t border-[#262626]/10">
+    <div className="py-20 border-t border-white/5">
         <div className="flex justify-between items-center mb-12">
-            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#262626]/70 heading-font">AI Oracle</h2>
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 heading-font">AI Oracle</h2>
             <button 
                 onClick={() => {
                   if(confirm("Clear history?")) {
-                    cloudService.clearChatHistory(userData?.partnerCode || 'default');
+                    cloudService.clearChatHistory(userData?.partnerCode || userData?.id || 'default');
                     setMessages([{ role: 'model', text: 'History cleared.', timestamp: Date.now() }]);
                   }
                 }}
-                className="text-[8px] font-bold uppercase tracking-widest text-[#262626]/30 hover:text-[#262626] transition-all"
+                className="text-[8px] font-bold uppercase tracking-widest text-white/20 hover:text-white transition-all"
             >
               Reset Memory
             </button>
@@ -105,14 +128,14 @@ const AICoach: React.FC = () => {
                     <React.Fragment key={i}>
                         {showTime && (
                             <div className="flex justify-center my-6">
-                                <span className="text-[7px] font-bold uppercase tracking-[0.3em] text-[#262626]/20 bg-white/40 px-3 py-1 rounded-full">{formatTimestamp(msg.timestamp)}</span>
+                                <span className="text-[7px] font-bold uppercase tracking-[0.3em] text-white/20 bg-white/5 px-3 py-1 rounded-full">{formatTimestamp(msg.timestamp)}</span>
                             </div>
                         )}
                         <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-fade-in`}>
-                          <span className="text-[8px] font-bold uppercase tracking-widest text-[#262626]/60 mb-2 heading-font">
+                          <span className="text-[8px] font-bold uppercase tracking-widest text-white/30 mb-2 heading-font">
                             {msg.role === 'model' ? 'Oracle' : 'You'}
                           </span>
-                          <div className={`text-xl leading-relaxed ${msg.role === 'user' ? 'text-right italic text-[#262626]/90 bg-[#262626]/5 p-4 rounded-2xl' : 'text-left font-light text-[#262626] p-4'}`}>
+                          <div className={`text-xl leading-relaxed prose prose-invert prose-stone ${msg.role === 'user' ? 'text-right italic text-[#FDFCF0]/90 bg-white/5 p-4 rounded-2xl' : 'text-left font-light text-[#FDFCF0] p-4'}`}>
                               <Markdown>{msg.text}</Markdown>
                           </div>
                         </div>
@@ -120,10 +143,10 @@ const AICoach: React.FC = () => {
                 );
             })}
             {isLoading && (
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#262626]/40 animate-pulse flex items-center gap-2">
-                    <span className="w-1 h-1 bg-black/20 rounded-full animate-bounce" />
-                    <span className="w-1 h-1 bg-black/20 rounded-full animate-bounce [animation-delay:0.2s]" />
-                    <span className="w-1 h-1 bg-black/20 rounded-full animate-bounce [animation-delay:0.4s]" />
+                <div className="text-[8px] font-bold uppercase tracking-widest text-[#A8FFB5]/40 animate-pulse flex items-center gap-2">
+                    <span className="w-1 h-1 bg-[#A8FFB5]/40 rounded-full animate-bounce" />
+                    <span className="w-1 h-1 bg-[#A8FFB5]/40 rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <span className="w-1 h-1 bg-[#A8FFB5]/40 rounded-full animate-bounce [animation-delay:0.4s]" />
                     Architecting wisdom...
                 </div>
             )}
@@ -136,12 +159,12 @@ const AICoach: React.FC = () => {
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 placeholder="Share a thought..."
-                className="w-full py-6 bg-transparent border-b border-[#262626]/20 focus:border-[#262626] outline-none text-2xl font-light italic transition-all placeholder-[#262626]/40 pr-24"
+                className="w-full py-6 bg-transparent border-b border-white/10 focus:border-[#A8FFB5] outline-none text-2xl font-light italic transition-all placeholder-white/20 pr-24"
             />
             <button 
                 type="submit" 
                 disabled={!userInput.trim() || isLoading}
-                className="absolute right-0 bottom-6 text-[10px] font-bold uppercase tracking-widest text-[#262626]/60 hover:text-[#262626] transition-colors disabled:opacity-0 heading-font"
+                className="absolute right-0 bottom-6 text-[10px] font-bold uppercase tracking-widest text-[#A8FFB5]/60 hover:text-[#A8FFB5] transition-colors disabled:opacity-0 heading-font"
             >
                 Speak
             </button>

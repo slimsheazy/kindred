@@ -25,12 +25,28 @@ export interface UserData {
   vibe?: string;
   lastActive?: number;
   lastPulseReceived?: number;
+  currentLessonId?: string | null;
+  theme?: 'light' | 'midnight';
+}
+
+export interface FoundationSummary {
+  content: string;
+  timestamp: number;
+  entryCountAtSummary: number;
 }
 
 export interface BondScore {
   category: string;
   score: number;
   timestamp: number;
+}
+
+export interface GrowthLog {
+  id: string;
+  timestamp: number;
+  category: string;
+  delta: number;
+  context: string;
 }
 
 export interface Lesson {
@@ -66,6 +82,7 @@ export interface Activity {
   isGenerated?: boolean;
   startTime?: number;
   reflection?: string;
+  startedBy?: string;
 }
 
 export interface JournalEntry {
@@ -108,4 +125,13 @@ export interface QuizSession {
   title: string;
   questions: QuizQuestion[];
   timestamp: number;
+}
+
+export interface WeeklySynthesis {
+  id: string;
+  partnerCode: string;
+  poem: string;
+  insight: string;
+  timestamp: number;
+  readBy: string[]; // User IDs who have seen it
 }

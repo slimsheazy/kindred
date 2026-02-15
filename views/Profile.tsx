@@ -7,14 +7,17 @@ import { isSupabaseConfigured, updateSupabaseConfig, clearSupabaseConfig } from 
 
 interface ProfileProps {
   onReset: () => void;
+  onThemeChange?: (theme: 'light' | 'midnight') => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ onReset }) => {
+const Profile: React.FC<ProfileProps> = ({ onReset, onThemeChange }) => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [isConfiguringCloud, setIsConfiguringCloud] = useState(false);
+  const [foundPartner, setFoundPartner] = useState<{ id: string, userName: string } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   
   const [partnerCodeInput, setPartnerCodeInput] = useState('');
   const [syncTimestamp, setSyncTimestamp] = useState<number>(Date.now());
@@ -53,6 +56,16 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
     setTimeout(() => setActiveMessage(null), 3000);
   };
 
+  const toggleTheme = () => {
+    if (!userData) return;
+    const newTheme: 'light' | 'midnight' = userData.theme === 'midnight' ? 'light' : 'midnight';
+    const updated: UserData = { ...userData, theme: newTheme };
+    setUserData(updated);
+    localStorage.setItem('kindred_user_data', JSON.stringify(updated));
+    if (onThemeChange) onThemeChange(newTheme);
+    showMessage(`Resonance shifted to ${newTheme === 'midnight' ? 'Midnight' : 'Light'}`);
+  };
+
   const copyCode = () => {
     if (userData?.id) {
       navigator.clipboard.writeText(userData.id);
@@ -72,16 +85,34 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
   };
 
   const linkPartner = async () => {
-    if (partnerCodeInput.trim() && userData) {
-        const newCode = partnerCodeInput.trim();
-        await cloudService.linkPartner(userData.id, newCode);
-        const updated = { ...userData, partnerCode: newCode };
+    if (foundPartner && userData) {
+        await cloudService.linkPartner(userData.id, foundPartner.id);
+        const isMutual = await cloudService.checkMutualLink(userData.id, foundPartner.id);
+        
+        const updated: UserData = { ...userData, partnerCode: foundPartner.id };
         setUserData(updated);
         localStorage.setItem('kindred_user_data', JSON.stringify(updated));
+        
+        if (isMutual) {
+            localStorage.setItem('kindred_fusion_pending', 'true');
+        }
+
         initializeGeminiContext(updated);
         setIsLinking(false);
-        showMessage("Connected to shared space.");
+        showMessage("Handshake initiated.");
         window.location.reload();
+    }
+  };
+
+  const handleCodeChange = async (val: string) => {
+    setPartnerCodeInput(val);
+    if (val.length > 5) {
+        setIsSearching(true);
+        const p = await cloudService.getPartnerByCode(val);
+        setFoundPartner(p);
+        setIsSearching(false);
+    } else {
+        setFoundPartner(null);
     }
   };
 
@@ -104,19 +135,19 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
   };
 
   return (
-    <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in relative">
+    <div className="px-6 py-12 max-w-xl mx-auto animate-fade-in relative transition-colors duration-700">
        <header className="mb-16">
-        <h1 className="text-6xl font-light mb-2 text-[#000000]">Space.</h1>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#000000]/70 heading-font">Global Synchronization</p>
+        <h1 className="text-clamp-6xl font-light mb-2">Space.</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] opacity-40 heading-font">Global Synchronization</p>
       </header>
       
       <div className="flex flex-col items-center mb-16">
-        <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-[#FF007F]/5 to-[#00FF41]/5 flex items-center justify-center border border-[#000000]/5 shadow-sm mb-6 relative group">
-            <span className="text-4xl font-light text-[#000000] tracking-tighter">{getInitials()}</span>
-            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-4 border-[#FDFCF0] ${isSupabaseConfigured ? 'bg-[#00FF41] animate-pulse' : 'bg-gray-400'}`} title={isSupabaseConfigured ? "Cloud Active" : "Local Only"} />
+        <div className="w-40 h-40 rounded-full bg-gradient-to-tr from-[#D44D85]/10 to-[#3D8C50]/10 flex items-center justify-center border border-black/5 dark:border-white/5 shadow-sm mb-8 relative group">
+            <span className="text-5xl font-light tracking-tighter">{getInitials()}</span>
+            <div className={`absolute -bottom-1 -right-1 w-8 h-8 rounded-full border-4 border-current ${isSupabaseConfigured ? 'bg-[#3D8C50] animate-pulse' : 'bg-black/10'}`} title={isSupabaseConfigured ? "Cloud Active" : "Local Only"} />
         </div>
         
-        <h2 className="text-3xl font-light text-[#000000]">
+        <h2 className="text-clamp-4xl font-light">
             {userData ? `${userData.userName} & ${userData.partnerName}` : 'Your Connection'}
         </h2>
         
@@ -128,18 +159,18 @@ const Profile: React.FC<ProfileProps> = ({ onReset }) => {
               </span>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex gap-6">
               <button 
                   onClick={() => setIsLinking(true)}
-                  className="text-[10px] font-bold text-[#00FF41] uppercase tracking-[0.2em] border-b border-[#00FF41]/30 pb-1 heading-font"
+                  className="text-xs font-bold text-[#3D8C50] dark:text-[#A8FFB5] uppercase tracking-[0.2em] border-b border-current pb-2 heading-font"
               >
                 Merge with Partner
               </button>
               <button 
-                  onClick={() => setIsConfiguringCloud(true)}
-                  className="text-[10px] font-bold text-black/40 uppercase tracking-[0.2em] border-b border-black/10 pb-1 heading-font"
+                  onClick={toggleTheme}
+                  className="text-xs font-bold opacity-40 uppercase tracking-[0.2em] border-b border-current pb-2 heading-font"
               >
-                Cloud Settings
+                {userData?.theme === 'midnight' ? 'Shift to Light' : 'Shift to Midnight'}
               </button>
             </div>
         </div>
