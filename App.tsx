@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { View, UserData } from './types';
 import BottomNav from './components/BottomNav';
 import Dashboard from './views/Dashboard';
@@ -125,6 +126,7 @@ const App: React.FC = () => {
       {currentView !== View.Mediation && (
         <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
       )}
+      <Analytics />
     </div>
   );
 };
