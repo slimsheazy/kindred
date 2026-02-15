@@ -59,7 +59,9 @@ const CalibrationMap: React.FC<{ assessment: Record<string, number> }> = ({ asse
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState<'welcome' | 'auth' | 'profile' | 'assessment' | 'intentions'>('welcome');
+  const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,34 +96,34 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   });
 
   const handleAuth = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!isSupabaseConfigured) {
-    setError("Cloud not configured. Proceeding in local-only mode.");
-    setStep('profile');
-    return;
-  }
-  
-  setLoading(true);
-  setError(null);
-  
-  try {
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
+    e.preventDefault();
+    if (!isSupabaseConfigured) {
+      setError("Cloud not configured. Proceeding in local-only mode.");
+      setStep('profile');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isLogin) {
+        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        if (authError) throw authError;
+      } else {
+        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+        if (authError) throw authError;
+        if (authData.user) {
+          setData(prev => ({ ...prev, id: authData.user!.id }));
+          setStep('profile');
+        }
       }
-    });
-    
-    if (authError) throw authError;
-    
-    setError("Check your email for the magic link!");
-    // User will be redirected after clicking the link
-  } catch (err: any) {
-    setError(err.message || "Authentication failed.");
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (err: any) {
+      setError(err.message || "Authentication failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
     const handleGoogleAuth = async () => {
     if (!isSupabaseConfigured) {
@@ -174,33 +176,21 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         
         {step === 'welcome' && (
           <div className="text-center">
-type="password"            <p className="text-xl text-[#000000]/70 font-light mb-12 leading-relaxed italic">Architecting shared depth through intentional space and AI insight.</p>
+            <h1 className="text-7xl font-light tracking-tight leading-tight mb-8">Kindred.</h1>
+            <p className="text-xl text-[#000000]/70 font-light mb-12 leading-relaxed italic">Architecting shared depth through intentional space and AI insight.</p>
             <button onClick={() => setStep('auth')} className="w-full border border-[#000000] py-5 rounded-full font-bold text-xs uppercase tracking-[0.3em] hover:bg-[#000000] hover:text-white transition-all heading-font">Initiate</button>
           </div>
         )}
 
         {step === 'auth' && (
           <div className="space-y-10">
-             <h2 className="text-5xl font-light text-center">Send Magic Link}</h2>
+             <h2 className="text-5xl font-light text-center">{isLogin ? 'Welcome back.' : 'Create Space.'}</h2>
              <form onSubmit={handleAuth} className="space-y-6">
-  {error && <p className={`text-[10px] font-bold uppercase text-center ${error.includes('Check your email') ? 'text-green-600' : 'text-red-500'}`}>{error}</p>}
-  <input 
-    type="email" 
-    placeholder="Email" 
-    value={email} 
-    onChange={(e) => setEmail(e.target.value)} 
-    className="w-full bg-transparent border-b border-black/10 py-4 outline-none text-xl" 
-    required 
-  />
-  <button 
-    type="submit" 
-    disabled={loading} 
-    className="w-full bg-black text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em]"
-  >
-    {loading ? '...' : 'Send Magic Link'}
-  </button>
-</form>
-
+                {error && <p className="text-red-500 text-[10px] font-bold uppercase text-center">{error}</p>}
+                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-transparent border-b border-black/10 py-4 outline-none text-xl" required />
+                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-transparent border-b border-black/10 py-4 outline-none text-xl" required />
+                <button type="submit" disabled={loading} className="w-full bg-black text-white py-5 rounded-full font-bold text-xs uppercase tracking-[0.2em]">{loading ? '...' : (isLogin ? 'Enter' : 'Join')}</button>
+             </form>
              <button onClick={() => setIsLogin(!isLogin)} className="w-full text-[10px] font-bold uppercase tracking-widest text-black/40">{isLogin ? "Need an account?" : "Already registered?"}</button>
                         <div className="relative flex items-center justify-center my-6">
               <div className="border-t border-black/10 w-full absolute"></div>
