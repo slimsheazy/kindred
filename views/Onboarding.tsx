@@ -94,7 +94,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     'Shared Vision': 5
   });
 
-  const handleAuth = async (e: React.FormEvent) => {
+  coconst handleAuth = async (e: React.FormEvent) => {
   e.preventDefault();
   if (!isSupabaseConfigured) {
     setError("Cloud not configured. Proceeding in local-only mode.");
@@ -124,7 +124,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   }
 };
 
-    nst handleComplete = async () => {
+    const handleComplete = async () => {
     const finalData = { ...data, syncStatus: 'synced' as const };
     
     // Save initial baseline scores
