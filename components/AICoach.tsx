@@ -66,7 +66,7 @@ const AICoach: React.FC = () => {
       });
       const modelMsg: ChatMessage = { role: 'model', text: res, timestamp: Date.now() };
       setMessages(prev => [...prev, modelMsg]);
-      await cloudService.saveChatMessage(userData.partnerCode || 'default', modelMsg);
+      await cloudService.saveChatMessage(partnerCode, modelMsg);
       
       const recentContext = messages.slice(-2).map(m => m.text).join(' ') + ' ' + currentInput + ' ' + res;
       const updates = await analyzeInteractionForScores(recentContext);
