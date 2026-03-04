@@ -76,7 +76,7 @@ const AICoach: React.FC = () => {
           // Create Growth Logs for attribution
           for (const update of updates) {
               const log: GrowthLog = {
-                  id: `growth-${Date.now()}-${Math.random()}`,
+                  id: `growth-${crypto.randomUUID()}`,
                   timestamp: Date.now(),
                   category: update.category,
                   delta: update.delta,
