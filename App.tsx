@@ -24,6 +24,36 @@ const App: React.FC = () => {
     setRefreshTrigger(prev => prev + 1);
   }, []);
 
+  // Sensory Engine: Mouse & Tilt
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const x = (e.clientX / window.innerWidth) * 100;
+      const y = (e.clientY / window.innerHeight) * 100;
+      document.documentElement.style.setProperty('--mouse-x', `${x}%`);
+      document.documentElement.style.setProperty('--mouse-y', `${y}%`);
+    };
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      // Map tilt to a percentage. beta -90 to 90, gamma -90 to 90
+      if (e.beta && e.gamma) {
+        const x = ((e.gamma + 45) / 90) * 100;
+        const y = ((e.beta + 45) / 90) * 100;
+        document.documentElement.style.setProperty('--mouse-x', `${x}%`);
+        document.documentElement.style.setProperty('--mouse-y', `${y}%`);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener('deviceorientation', handleOrientation);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, []);
+
   useEffect(() => {
     // 1. Check for active Supabase session
     const checkSession = async () => {
@@ -66,6 +96,15 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [syncState]);
 
+  // Apply Theme Class
+  useEffect(() => {
+    if (userData?.theme === 'midnight') {
+      document.body.classList.add('midnight-mode');
+    } else {
+      document.body.classList.remove('midnight-mode');
+    }
+  }, [userData?.theme]);
+
   const handleOnboardingComplete = useCallback((data: UserData) => {
     setUserData(data);
     initializeGeminiContext(data);
@@ -99,7 +138,7 @@ const App: React.FC = () => {
       case View.Goals:
         return <Goals key={refreshTrigger} />;
       case View.Profile:
-        return <Profile onReset={handleReset} />;
+        return <Profile onReset={handleReset} onThemeChange={(t) => setUserData(prev => prev ? {...prev, theme: t} : null)} />;
       case View.Mediation:
         return <ConflictNavigator userData={userData} onClose={() => setCurrentView(View.Dashboard)} />;
       default:
@@ -109,7 +148,7 @@ const App: React.FC = () => {
 
   if (hasOnboarded === null) return (
     <div className="min-h-screen flex items-center justify-center bg-[#FDFCF0]">
-      <div className="w-8 h-8 border-2 border-black/10 border-t-black rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-black/10 border-t-[#3D8C50] rounded-full animate-spin" />
     </div>
   );
 
@@ -118,7 +157,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen font-sans flex flex-col max-w-lg mx-auto overflow-x-hidden bg-[#FDFCF0]">
+    <div className="min-h-screen font-sans flex flex-col max-w-lg mx-auto overflow-x-hidden transition-colors duration-700">
       <main className="flex-grow pb-32 pt-4 px-4 animate-fade-in">
         {viewContent}
       </main>
